@@ -1,0 +1,4 @@
+skuId,unitPrice,currency,leadDays,minQty
+SKU-42,12.50,USD,3,50
+SKU-17,18.00,USD,5,25
+SKU-88,6.75,USD,2,100

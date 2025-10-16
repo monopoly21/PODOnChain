@@ -1,0 +1,3 @@
+locationId,name,line1,city,state,country,postal,timezone
+DC1,Main Distribution Center,100 Harbor Way,Los Angeles,CA,US,90001,America/Los_Angeles
+DC2,East Hub,250 Market Street,New York,NY,US,10001,America/New_York

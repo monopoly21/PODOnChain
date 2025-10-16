@@ -1,0 +1,194 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  wallet    String   @id
+  createdAt DateTime @default(now())
+}
+
+model Import {
+  id           String       @id @default(cuid())
+  owner        String
+  kind         String
+  path         String
+  sha256       String
+  originalName String
+  rowCount     Int?
+  status       String
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@index([owner])
+}
+
+model Product {
+  owner        String
+  skuId        String
+  name         String
+  unit         String
+  minThreshold Int      @default(0)
+  targetStock  Int      @default(0)
+  active       Boolean  @default(true)
+  version      Int      @default(1)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@id([owner, skuId])
+  @@index([owner])
+}
+
+model InventoryPolicy {
+  id                String   @id @default(cuid())
+  buyer             String
+  skuId             String
+  preferredSupplier String?
+  reorderThreshold  Int      @default(0)
+  targetQuantity    Int      @default(0)
+  minReorderQty     Int      @default(0)
+  maxReorderQty     Int?
+  maxUnitPrice      Decimal?
+  currency          String?  // Optional currency preference for pricing checks
+  metadataRaw       String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([buyer])
+  @@unique([buyer, skuId])
+}
+
+model Location {
+  owner      String
+  locationId String
+  name       String
+  addressRaw String
+  lat        Float?
+  lon        Float?
+  timezone   String
+  version    Int      @default(1)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@id([owner, locationId])
+  @@index([owner])
+}
+
+model SupplierPrice {
+  owner     String
+  skuId     String
+  unitPrice Decimal
+  currency  String
+  leadDays  Int
+  minQty    Int      @default(1)
+  active    Boolean  @default(true)
+  version   Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@id([owner, skuId])
+  @@index([owner])
+}
+
+model Courier {
+  owner         String
+  courierWallet String
+  label         String?
+  active        Boolean @default(true)
+  version       Int     @default(1)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@id([owner, courierWallet])
+  @@index([owner])
+  @@index([courierWallet])
+}
+
+model Order {
+  id          String   @id @default(cuid())
+  buyer       String
+  supplier    String
+  status      String   // Created|Approved|Funded|InFulfillment|Shipped|Delivered|Disputed|Resolved|Cancelled
+  currency    String   @default("USD")
+  totalAmount Float    @default(0)
+  approvedAt  DateTime?
+  fundedAt    DateTime?
+  completedAt DateTime?
+  cancelledAt DateTime?
+  metadataRaw String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  payments    Payment[]
+  shipments   Shipment[]
+
+  @@index([buyer])
+  @@index([supplier])
+}
+
+model Shipment {
+  id              String   @id @default(cuid())
+  orderId         String
+  shipmentNo      Int
+  supplier        String
+  buyer           String
+  pickupLat       Float?
+  pickupLon       Float?
+  dropLat         Float?
+  dropLon         Float?
+  dueBy           DateTime
+  status          String   @default("Created") // Created|ReadyForPickup|InTransit|Delivered|Cancelled
+  assignedCourier String?
+  metadataRaw     String?
+  readyAt         DateTime?
+  pickedUpAt      DateTime?
+  deliveredAt     DateTime?
+  cancelledAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  order           Order    @relation(fields: [orderId], references: [id])
+
+  @@index([supplier])
+  @@index([buyer])
+  @@index([assignedCourier])
+  @@unique([shipmentNo, supplier])
+}
+
+model Payment {
+  id          String   @id @default(cuid())
+  orderId     String
+  payer       String
+  payee       String
+  amount      Float
+  currency    String   @default("USD")
+  status      String   @default("Pending") // Pending|Escrowed|Released|Failed|Refunded
+  escrowTx    String?
+  releaseTx   String?
+  metadataRaw String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  order       Order    @relation(fields: [orderId], references: [id])
+
+  @@index([orderId])
+  @@index([payer])
+  @@index([payee])
+}
+
+model Proof {
+  id          String   @id @default(cuid())
+  shipmentNo  Int
+  kind        String   // pickup|drop
+  photoHash   String?
+  photoCid    String?
+  signer      String
+  claimedTs   Int
+  litDistance Int?
+  litOk       Boolean
+  createdAt   DateTime @default(now())
+
+  @@index([shipmentNo])
+  @@index([signer])
+}

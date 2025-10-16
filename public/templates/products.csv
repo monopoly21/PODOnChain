@@ -1,0 +1,4 @@
+skuId,name,unit,minThreshold,targetStock
+SKU-42,Widget Pro,pcs,200,500
+SKU-17,Gadget Mini,pcs,150,400
+SKU-88,Bolt Pack,box,60,120
