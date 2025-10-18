@@ -6,7 +6,7 @@ import { Analytics } from "@vercel/analytics/next"
 import "./globals.css"
 import { Providers } from "@/components/providers"
 import { Suspense } from "react"
-import { BrandHeader } from "@/components/site-header"
+import { AppShell } from "@/components/layout/app-shell"
 
 export const metadata: Metadata = {
   title: "v0 App",
@@ -24,8 +24,7 @@ export default function RootLayout({
       <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable} antialiased`}>
         <Suspense fallback={<div>Loading...</div>}>
           <Providers>
-            <BrandHeader />
-            {children}
+            <AppShell>{children}</AppShell>
           </Providers>
         </Suspense>
         <Analytics />

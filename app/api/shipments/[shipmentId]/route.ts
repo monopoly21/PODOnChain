@@ -40,7 +40,13 @@ export async function GET(_request: Request, context: { params: Promise<{ shipme
     orderBy: { createdAt: "asc" },
   })
 
-  return NextResponse.json({ shipment: serializeShipment(shipment), proofs })
+  const normalizedProofs = proofs.map(({ litDistance, litOk, ...rest }) => ({
+    ...rest,
+    distanceMeters: typeof litDistance === "number" ? litDistance : null,
+    withinRadius: typeof litOk === "boolean" ? litOk : null,
+  }))
+
+  return NextResponse.json({ shipment: serializeShipment(shipment), proofs: normalizedProofs })
 }
 
 function serializeShipment(shipment: any) {

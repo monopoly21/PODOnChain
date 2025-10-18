@@ -3,7 +3,17 @@
 import { useRouter } from "next/navigation"
 import { useState } from "react"
 
-export function CsvCard({ kind, title, description }: { kind: "buyer" | "supplier"; title: string; description: string }) {
+import { Button } from "@/components/ui/button"
+
+export function CsvCard({
+  kind,
+  title,
+  description,
+}: {
+  kind: "buyer" | "supplier"
+  title: string
+  description: string
+}) {
   const [file, setFile] = useState<File | null>(null)
   const [output, setOutput] = useState<string>("")
   const [busy, setBusy] = useState(false)
@@ -38,25 +48,33 @@ export function CsvCard({ kind, title, description }: { kind: "buyer" | "supplie
   }
 
   return (
-    <div className="rounded-lg border border-border bg-card p-4 space-y-3">
-      <header className="space-y-1">
-        <h3 className="font-medium">{title}</h3>
-        <p className="text-xs text-muted-foreground">{description}</p>
+    <div className="neo-surface space-y-4 p-6">
+      <header className="space-y-2 border-b-[2px] border-border/40 pb-3">
+        <h3 className="text-lg font-semibold uppercase tracking-wide">{title}</h3>
+        <p className="text-sm text-muted-foreground">{description}</p>
       </header>
-      <input
-        type="file"
-        accept=".csv"
-        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-        onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-      />
-      <button
-        className="rounded-md border border-primary px-3 py-1 text-sm font-medium text-primary disabled:opacity-70"
+      <label className="flex flex-col gap-2 text-xs font-semibold uppercase tracking-wide">
+        Upload CSV
+        <input
+          type="file"
+          accept=".csv"
+          className="w-full rounded-[1.25rem] border-[3px] border-dashed border-border bg-card/80 px-4 py-3 text-sm font-medium"
+          onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+        />
+      </label>
+      <Button
+        variant="outline"
         disabled={busy || !file}
         onClick={handleUpload}
+        className="w-full justify-center"
       >
         {busy ? "Uploading…" : "Upload & Ingest"}
-      </button>
-      {output && <pre className="max-h-48 overflow-auto rounded bg-muted p-2 text-xs">{output}</pre>}
+      </Button>
+      {output && (
+        <pre className="max-h-48 overflow-auto rounded-[1.25rem] border-[3px] border-border bg-muted/60 p-3 text-xs leading-relaxed">
+          {output}
+        </pre>
+      )}
     </div>
   )
 }

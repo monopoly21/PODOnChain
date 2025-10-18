@@ -972,19 +972,17 @@ export default function DashboardPage() {
 
   const buyerTab = (
     <section className="space-y-8">
-      <div className="rounded-lg border border-border bg-card">
-        <header className="border-b border-border px-4 py-3">
-          <div className="flex flex-col gap-1">
-            <h2 className="font-semibold">Buyer catalog</h2>
-            <p className="text-xs text-muted-foreground">
-              Connected buyer: <code>{account.address}</code>
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Add SKUs, tune reorder thresholds, or set live inventory levels. Updates propagate to the agents instantly.
-            </p>
-          </div>
+      <div className="neo-surface space-y-6 p-6">
+        <header className="space-y-2 border-b-[3px] border-border/60 pb-4">
+          <h2 className="text-xl font-bold uppercase tracking-wide">Buyer catalog</h2>
+          <p className="text-xs font-semibold uppercase text-muted-foreground">
+            Connected buyer: <span className="font-mono text-sm">{account.address}</span>
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Add SKUs, tune reorder thresholds, or set live inventory levels. Updates propagate to the agents instantly.
+          </p>
         </header>
-        <div className="p-4 space-y-4">
+        <div className="space-y-6">
           <form onSubmit={handleSaveProduct} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
             <div className="space-y-2">
               <Label htmlFor="buyer-sku">SKU</Label>
@@ -1041,15 +1039,15 @@ export default function DashboardPage() {
           </form>
           {productMessage && <p className="text-xs text-muted-foreground">{productMessage}</p>}
           <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-md border border-border bg-background/60 p-3">
+            <div className="rounded-[1.25rem] border-[3px] border-border bg-secondary/40 p-4 [box-shadow:var(--shadow-soft)]">
               <p className="text-xs font-medium text-muted-foreground">Tracked SKUs</p>
               <p className="mt-1 text-2xl font-semibold">{inventoryStats.totalSkus}</p>
             </div>
-            <div className="rounded-md border border-border bg-background/60 p-3">
+            <div className="rounded-[1.25rem] border-[3px] border-border bg-secondary/40 p-4 [box-shadow:var(--shadow-soft)]">
               <p className="text-xs font-medium text-muted-foreground">Units on hand</p>
               <p className="mt-1 text-2xl font-semibold">{inventoryStats.totalUnits}</p>
             </div>
-            <div className="rounded-md border border-border bg-background/60 p-3">
+            <div className="rounded-[1.25rem] border-[3px] border-border bg-secondary/40 p-4 [box-shadow:var(--shadow-soft)]">
               <p className="text-xs font-medium text-muted-foreground">SKUs at / below threshold</p>
               <p className={cn("mt-1 text-2xl font-semibold", inventoryStats.belowThreshold > 0 ? "text-amber-600 dark:text-amber-400" : "")}>
                 {inventoryStats.belowThreshold}
@@ -1122,12 +1120,12 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="rounded-lg border border-border bg-card p-4 space-y-4">
-        <header className="space-y-2">
-          <h2 className="text-lg font-semibold">Create purchase order</h2>
+      <div className="neo-surface space-y-6 p-6">
+        <header className="space-y-2 border-b-[3px] border-border/50 pb-4">
+          <h2 className="text-xl font-bold uppercase tracking-wide">Create purchase order</h2>
           <p className="text-sm text-muted-foreground">Enter supplier wallet to load their price list.</p>
         </header>
-        <div className="grid gap-4 md:grid-cols-[2fr_3fr]">
+        <div className="grid gap-6 md:grid-cols-[2fr_3fr]">
           <div className="space-y-3">
             <Label htmlFor="supplierWallet">Supplier wallet</Label>
             <Input
@@ -1216,9 +1214,9 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="rounded-lg border border-border bg-card">
-        <header className="border-b border-border px-4 py-3">
-          <h2 className="font-semibold">Orders</h2>
+      <div className="neo-surface space-y-4 p-6">
+        <header className="border-b-[3px] border-border/50 pb-3">
+          <h2 className="text-xl font-bold uppercase tracking-wide">Orders</h2>
         </header>
         <table className="w-full text-sm">
           <thead className="bg-muted/40">
@@ -1270,9 +1268,9 @@ export default function DashboardPage() {
         </table>
       </div>
 
-      <div className="rounded-lg border border-border bg-card">
-        <header className="border-b border-border px-4 py-3">
-          <h2 className="font-semibold">Ship-to locations</h2>
+      <div className="neo-surface space-y-4 p-6">
+        <header className="border-b-[3px] border-border/50 pb-3">
+          <h2 className="text-xl font-bold uppercase tracking-wide">Ship-to locations</h2>
         </header>
         <table className="w-full text-sm">
           <thead className="bg-muted/40">
@@ -1451,12 +1449,12 @@ export default function DashboardPage() {
 
   const supplierTab = (
     <section className="space-y-8">
-      <div className="rounded-lg border border-border bg-card">
-        <header className="border-b border-border px-4 py-3">
-          <h2 className="font-semibold">Price list</h2>
-          <p className="text-xs text-muted-foreground">Add or update supplier pricing directly from the dashboard.</p>
+      <div className="neo-surface space-y-6 p-6">
+        <header className="space-y-2 border-b-[3px] border-border/50 pb-4">
+          <h2 className="text-xl font-bold uppercase tracking-wide">Price list</h2>
+          <p className="text-sm text-muted-foreground">Add or update supplier pricing directly from the dashboard.</p>
         </header>
-        <div className="p-4 space-y-4">
+        <div className="space-y-6">
           <form onSubmit={handleSaveSupplierPrice} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
             <div className="space-y-2">
               <Label htmlFor="supplier-sku">SKU</Label>
@@ -1547,9 +1545,9 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="rounded-lg border border-border bg-card">
-        <header className="border-b border-border px-4 py-3">
-          <h2 className="font-semibold">Incoming orders</h2>
+      <div className="neo-surface space-y-4 p-6">
+        <header className="border-b-[3px] border-border/50 pb-3">
+          <h2 className="text-xl font-bold uppercase tracking-wide">Incoming orders</h2>
         </header>
         <table className="w-full text-sm">
           <thead className="bg-muted/40">
@@ -1643,9 +1641,9 @@ export default function DashboardPage() {
 
       {supplierOpenShipmentForm}
 
-      <div className="rounded-lg border border-border bg-card">
-        <header className="border-b border-border px-4 py-3 flex items-center justify-between">
-          <h2 className="font-semibold">Shipments</h2>
+      <div className="neo-surface space-y-4 p-6">
+        <header className="flex items-center justify-between border-b-[3px] border-border/50 pb-3">
+          <h2 className="text-xl font-bold uppercase tracking-wide">Shipments</h2>
           <p className="text-xs text-muted-foreground">
             Share the URL <code>/courier/&lt;shipmentId&gt;</code> with your courier or print a QR.
           </p>
@@ -1689,9 +1687,9 @@ export default function DashboardPage() {
         </table>
       </div>
 
-      <div className="rounded-lg border border-border bg-card">
-        <header className="border-b border-border px-4 py-3">
-          <h2 className="font-semibold">Courier allowlist</h2>
+      <div className="neo-surface space-y-4 p-6">
+        <header className="border-b-[3px] border-border/50 pb-3">
+          <h2 className="text-xl font-bold uppercase tracking-wide">Courier allowlist</h2>
         </header>
         <table className="w-full text-sm">
           <thead className="bg-muted/40">
@@ -1724,13 +1722,13 @@ export default function DashboardPage() {
     <section className="space-y-6">
       <p className="text-sm text-muted-foreground">
         Funded shipments that are unclaimed appear below. Claim a shipment to reserve it, then use the pickup/drop
-        buttons to submit Lit-verified proofs. Once claimed, shipments disappear for other couriers and remain visible
+        buttons to submit signed proofs. Once claimed, shipments disappear for other couriers and remain visible
         only in your dashboard.
       </p>
 
       <div className="grid gap-4 md:grid-cols-2">
         {courierShipments.length === 0 && (
-          <div className="col-span-full rounded-lg border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground">
+          <div className="col-span-full rounded-[1.75rem] border-[3px] border-dashed border-border bg-card/80 p-6 text-center text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             No shipments available yet.
           </div>
         )}
@@ -1756,8 +1754,8 @@ export default function DashboardPage() {
           const canHandleDrop = assignedToMe && shipment.status === "InTransit"
 
           return (
-            <div key={shipment.id} className="rounded-lg border border-border bg-card p-4 space-y-3 text-sm">
-              <header className="space-y-1">
+            <div key={shipment.id} className="neo-surface space-y-4 p-5 text-sm">
+              <header className="space-y-1 border-b-[2px] border-border/40 pb-3">
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
                   <span>Shipment #{shipment.shipmentNo}</span>
                   <span>{new Date(shipment.dueBy).toLocaleString()}</span>

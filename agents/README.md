@@ -17,7 +17,6 @@ Agents expect environment variables defined in `.env` (see `.env.example`). Once
 python -m agents.agents.inventory_agent
 python -m agents.agents.po_agent
 python -m agents.agents.payments_agent
-python -m agents.agents.shipment_agent
 python -m agents.agents.supplier_agent
 python -m agents.agents.logistics_agent
 python -m agents.agents.risk_agent

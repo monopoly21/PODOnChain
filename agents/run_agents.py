@@ -13,7 +13,6 @@ AGENT_MODULES = [
   "agents.agents.inventory_agent",
   "agents.agents.po_agent",
   "agents.agents.supplier_agent",
-  "agents.agents.shipment_agent",
   "agents.agents.payments_agent",
 ]
 

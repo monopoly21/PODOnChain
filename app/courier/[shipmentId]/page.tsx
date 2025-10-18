@@ -46,7 +46,8 @@ type ShipmentResponse = {
     signer: string
     createdAt: string
     photoHash?: string | null
-    litDistance?: number | null
+    distanceMeters?: number | null
+    withinRadius?: boolean | null
   }>
 }
 
@@ -281,7 +282,7 @@ export default function CourierPage({ params }: { params: Promise<{ shipmentId: 
           )}
         </header>
 
-        <section className="space-y-4 rounded-lg border border-border bg-card p-4">
+        <section className="neo-surface space-y-4 p-6">
           <label className="space-y-1 text-sm">
             <span className="font-medium">Notes (optional)</span>
             <Textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Condition, references…" />
@@ -300,16 +301,15 @@ export default function CourierPage({ params }: { params: Promise<{ shipmentId: 
         </section>
 
         {data && data.proofs.length > 0 && (
-          <section className="rounded-lg border border-border bg-card">
-            <header className="border-b border-border px-4 py-2 text-sm font-medium">Proof history</header>
+          <section className="neo-surface p-0">
+            <header className="border-b-[3px] border-border/50 px-5 py-3 text-sm font-semibold uppercase tracking-wide">
+              Proof history
+            </header>
             <ul className="divide-y divide-border text-xs">
               {data.proofs.map((proof) => (
-                <li key={proof.id} className="px-4 py-3 space-y-1">
+                <li key={proof.id} className="space-y-1 px-5 py-3">
                   <div className="font-semibold uppercase">{proof.kind}</div>
                   <div className="text-muted-foreground">{new Date(proof.createdAt).toLocaleString()}</div>
-                  {typeof proof.litDistance === "number" && (
-                    <div className="text-muted-foreground">Geo-distance: {proof.litDistance}m</div>
-                  )}
                   {proof.photoHash && <div className="font-mono break-all">{proof.photoHash}</div>}
                 </li>
               ))}

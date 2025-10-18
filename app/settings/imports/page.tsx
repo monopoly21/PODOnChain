@@ -95,7 +95,7 @@ export default function ImportsPage() {
         </section>
 
         <section className="grid gap-6 md:grid-cols-[2fr_3fr] items-start">
-          <form onSubmit={handleAddCourier} className="space-y-4 rounded-lg border border-border bg-card p-4">
+          <form onSubmit={handleAddCourier} className="neo-surface space-y-4 p-6">
             <header className="space-y-1">
               <h2 className="font-semibold">Manual courier allowlist</h2>
               <p className="text-xs text-muted-foreground">
@@ -128,7 +128,7 @@ export default function ImportsPage() {
             </Button>
           </form>
 
-          <div className="rounded-lg border border-border bg-card">
+          <div className="neo-surface p-6">
             <header className="border-b border-border px-4 py-3">
               <h2 className="font-semibold">Current allowlist</h2>
             </header>

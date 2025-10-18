@@ -5,8 +5,8 @@ import { cn } from "@/lib/utils"
 const STEPS = [
   { k: "inventory", title: "Inventory", desc: "Thresholds trigger RFQs/POs" },
   { k: "escrow", title: "Escrow (PYUSD)", desc: "Fund on testnet for safety" },
-  { k: "ship", title: "Ship", desc: "Master QR or Lit geofence" },
-  { k: "verify", title: "Verify", desc: "Signed milestones, explorer links" },
+  { k: "ship", title: "Ship", desc: "Master QR and courier tooling" },
+  { k: "verify", title: "Verify", desc: "Signed milestones with geofence checks" },
   { k: "release", title: "Release", desc: "Auto-pay supplier on Delivered" },
 ]
 
@@ -17,7 +17,7 @@ export function AnimatedSteps() {
         <div
           key={s.k}
           className={cn(
-            "rounded-lg border border-border bg-card p-4 text-left",
+            "neo-surface p-5 text-left",
             "animate-in fade-in slide-in-from-bottom duration-700",
           )}
           style={{ animationDelay: `${i * 120}ms` }}

@@ -27,8 +27,6 @@ class AgentSettings:
   order_registry_address: str | None
   shipment_registry_address: str | None
   sepolia_rpc_url: str | None
-  lit_delivery_oracle_key: str | None
-  delivery_oracle_private_key: str | None
   delivery_oracle_private_key: str | None
 
 
@@ -47,6 +45,5 @@ def get_settings() -> AgentSettings:
     order_registry_address=os.getenv("ORDER_REGISTRY_ADDRESS"),
     shipment_registry_address=os.getenv("SHIPMENT_REGISTRY_ADDRESS"),
     sepolia_rpc_url=os.getenv("SEPOLIA_RPC_URL"),
-    lit_delivery_oracle_key=os.getenv("LIT_DELIVERY_ORACLE_KEY"),
     delivery_oracle_private_key=os.getenv("DELIVERY_ORACLE_PRIVATE_KEY"),
   )

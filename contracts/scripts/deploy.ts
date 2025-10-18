@@ -27,9 +27,9 @@ async function main() {
   await (await escrow.setOrderRegistry(await order.getAddress())).wait()
   await (await order.setShipmentRegistry(await shipment.getAddress())).wait()
 
-  if (process.env.DELIVERY_ORACLE_PKP) {
-    await (await order.setOracle(process.env.DELIVERY_ORACLE_PKP)).wait()
-    console.log("Order oracle set to:", process.env.DELIVERY_ORACLE_PKP)
+  if (process.env.DELIVERY_ORACLE_ADDRESS) {
+    await (await order.setOracle(process.env.DELIVERY_ORACLE_ADDRESS)).wait()
+    console.log("Order oracle set to:", process.env.DELIVERY_ORACLE_ADDRESS)
   }
 
   console.log("\nSet the following environment variables:")
