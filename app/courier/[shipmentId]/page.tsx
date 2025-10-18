@@ -152,7 +152,6 @@ export default function CourierPage({ params }: { params: Promise<{ shipmentId: 
       const courierAddress = account.address
 
       let courierSignature = ""
-      let counterpartySignature = ""
       let locationHash = ""
       let distanceMeters: number | undefined
 
@@ -170,9 +169,40 @@ export default function CourierPage({ params }: { params: Promise<{ shipmentId: 
         })
         setLog("Awaiting courier signature…")
         courierSignature = await requestSignature(courierAddress, typed, account ?? undefined)
-        setLog(`Awaiting supplier signature from ${data.shipment.supplier}…`)
-        counterpartySignature = await requestSignature(data.shipment.supplier, typed, account ?? undefined)
         locationHash = typed.locationHash
+
+        setLog("Generating supplier signing link…")
+        const createRes = await fetch(`/api/signing-sessions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            kind: "pickup",
+            shipmentId: routeParams.shipmentId,
+            shipmentHash,
+            chainOrderId: chainOrderId.toString(),
+            claimedTs,
+            currentLat: latitude,
+            currentLon: longitude,
+            locationHash,
+            courierSignature,
+            radiusM: undefined,
+            notes,
+          }),
+        })
+        const createJson = await createRes.json()
+        if (!createRes.ok) {
+          throw new Error(typeof createJson === "string" ? createJson : JSON.stringify(createJson))
+        }
+        const roleLabel = createJson.role ?? "supplier"
+        const shareLink = typeof createJson.link === "string" ? createJson.link : createJson.supplierLink
+        setLog(
+          [
+            "Courier signature captured.",
+            `Share this link with the ${roleLabel} to countersign pickup`,
+            shareLink,
+          ].join("\n"),
+        )
+        return
       } else {
         const plannedDistance = Math.round(geodesicDistance(pickupLat!, pickupLon!, dropLat!, dropLon!))
         const typed = buildDropTypedData({
@@ -189,39 +219,47 @@ export default function CourierPage({ params }: { params: Promise<{ shipmentId: 
         })
         setLog("Awaiting courier signature…")
         courierSignature = await requestSignature(courierAddress, typed, account ?? undefined)
-        setLog(`Awaiting buyer signature from ${data.shipment.buyer}…`)
-        counterpartySignature = await requestSignature(data.shipment.buyer, typed, account ?? undefined)
         locationHash = typed.locationHash
         distanceMeters = plannedDistance
+
+        setLog("Generating buyer signing link…")
+        const createRes = await fetch(`/api/signing-sessions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            kind: "drop",
+            shipmentId: routeParams.shipmentId,
+            shipmentHash,
+            chainOrderId: chainOrderId.toString(),
+            claimedTs,
+            currentLat: latitude,
+            currentLon: longitude,
+            locationHash,
+            courierSignature,
+            distanceMeters,
+            pickupLat,
+            pickupLon,
+            dropLat,
+            dropLon,
+            radiusM: undefined,
+            notes,
+          }),
+        })
+        const createJson = await createRes.json()
+        if (!createRes.ok) {
+          throw new Error(typeof createJson === "string" ? createJson : JSON.stringify(createJson))
+        }
+        const dropRoleLabel = createJson.role ?? "buyer"
+        const dropShareLink = typeof createJson.link === "string" ? createJson.link : createJson.supplierLink
+        setLog(
+          [
+            "Courier signature captured.",
+            `Share this link with the ${dropRoleLabel} to countersign drop`,
+            dropShareLink,
+          ].join("\n"),
+        )
+        return
       }
-
-      const res = await fetch(`/api/courier/shipments/${routeParams.shipmentId}/${kind}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          shipmentHash,
-          orderId: chainOrderId.toString(),
-          supplier: data.shipment.supplier,
-          buyer: data.shipment.buyer,
-          shipmentNo: data.shipment.shipmentNo,
-          claimedTs,
-          currentLat: latitude,
-          currentLon: longitude,
-          pickupLat,
-          pickupLon,
-          dropLat,
-          dropLon,
-          notes,
-          courierSignature,
-          counterpartySignature,
-          locationHash,
-          distanceMeters,
-        }),
-      })
-
-      const json = await res.json()
-      if (!res.ok) throw new Error(typeof json === "string" ? json : JSON.stringify(json))
-      setLog(JSON.stringify(json, null, 2))
     } catch (error) {
       setLog(error instanceof Error ? error.message : "Failed to submit proof")
     } finally {
@@ -341,10 +379,7 @@ async function requestSignature<
       })
     }
     if (active && active !== normalizedExpected) {
-      console.warn("Provider active account differs from expected signer", {
-        expected: normalizedExpected,
-        active,
-      })
+      throw new Error(`Connect wallet ${expectedAddress} to continue`)
     }
 
     const payload = JSON.stringify({

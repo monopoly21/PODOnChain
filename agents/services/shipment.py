@@ -342,6 +342,30 @@ async def process_milestone(update: ShipmentMilestoneUpdate, *, radius_m: Option
   drop_lat = float(shipment["dropLat"]) if shipment.get("dropLat") is not None else None
   drop_lon = float(shipment["dropLon"]) if shipment.get("dropLon") is not None else None
 
+  if update.milestone == "Pickup":
+    if pickup_lat is None or pickup_lon is None:
+      logger.warning("Shipment %s missing pickup coordinates", update.shipment_id)
+      return {"status": "missing_pickup_coordinates", "escrow_tx": None}
+
+    if update.latitude is None or update.longitude is None:
+      logger.warning("Pickup update missing courier coordinates for shipment %s", update.shipment_id)
+      return {"status": "missing_courier_coordinates", "escrow_tx": None}
+
+    distance = geodesic_distance(pickup_lat, pickup_lon, update.latitude, update.longitude)
+    if not isfinite(distance) or distance > effective_radius:
+      logger.warning(
+        "Shipment %s pickup location outside geofence (distance %.2f m, radius %.2f m)",
+        update.shipment_id,
+        distance,
+        effective_radius,
+      )
+      return {
+        "status": "outside_pickup_geofence",
+        "escrow_tx": None,
+        "distance": distance if isfinite(distance) else None,
+        "radius": effective_radius,
+      }
+
   if update.milestone == "Delivered":
     if drop_lat is None or drop_lon is None:
       logger.warning("Shipment %s missing drop coordinates", update.shipment_id)

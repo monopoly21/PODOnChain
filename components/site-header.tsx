@@ -10,6 +10,7 @@ import {
   useActiveWallet,
   useActiveWalletChain,
   useDisconnect,
+  useActiveWalletConnectionStatus,
 } from "thirdweb/react"
 import { sepolia } from "thirdweb/chains"
 import { createWallet } from "thirdweb/wallets"
@@ -25,6 +26,7 @@ export function BrandHeader() {
   const wallet = useActiveWallet()
   const chain = useActiveWalletChain()
   const { disconnect } = useDisconnect()
+  const connectionStatus = useActiveWalletConnectionStatus()
 
   const navItems = account
     ? [
@@ -52,11 +54,19 @@ export function BrandHeader() {
   }, [account, pathname, router])
 
   useEffect(() => {
-    const allowAnonymous = pathname?.startsWith("/courier/")
-    if (!account && pathname !== "/" && !allowAnonymous) {
+    const allowAnonymous =
+      pathname?.startsWith("/courier/") ||
+      pathname?.startsWith("/sign/") ||
+      pathname === "/login"
+    if (
+      !account &&
+      connectionStatus === "disconnected" &&
+      pathname !== "/" &&
+      !allowAnonymous
+    ) {
       router.replace("/")
     }
-  }, [account, pathname, router])
+  }, [account, connectionStatus, pathname, router])
 
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-background/90 backdrop-blur">

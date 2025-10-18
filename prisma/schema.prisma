@@ -192,3 +192,43 @@ model Proof {
   @@index([shipmentNo])
   @@index([signer])
 }
+
+model SigningSession {
+  id              String               @id @default(cuid())
+  sessionUid      String               @unique
+  shipmentId      String
+  orderId         String
+  chainOrderId    String
+  kind            String               @default("pickup")
+  courier         String
+  supplier        String
+  deadline        DateTime
+  status          String               @default("PENDING_SUPPLIER")
+  courierNonce    String
+  supplierNonce   String
+  contextHash     String
+  courierSignature String?
+  supplierSignature String?
+  payload         String
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  magicLinks      MagicLink[]
+
+  @@index([shipmentId])
+  @@index([orderId])
+  @@index([status])
+}
+
+model MagicLink {
+  id         String     @id @default(cuid())
+  tokenHash  String     @unique
+  role       String
+  jti        String
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime   @default(now())
+  sessionId  String
+  session    SigningSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+}

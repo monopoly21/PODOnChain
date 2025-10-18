@@ -61,7 +61,7 @@ export async function POST(request: Request, context: { params: Promise<{ shipme
       latitude: payload.currentLat,
       longitude: payload.currentLon,
       claimed_ts: Number(payload.claimedTs ?? Math.floor(Date.now() / 1000)),
-      radius_m: Number.isFinite(Number(payload.radiusM)) ? Number(payload.radiusM) : 5000,
+      radius_m: Number.isFinite(Number(payload.radiusM)) ? Number(payload.radiusM) : 30000,
       shipment_hash: shipmentHash,
       location_hash: locationHash,
       courier_signature: courierSignature,

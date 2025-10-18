@@ -7,6 +7,9 @@ import { geodesicDistance } from "@/lib/geo"
 export const runtime = "nodejs"
 
 const AGENT_BRIDGE_URL = process.env.AGENT_BRIDGE_URL || "http://localhost:8200"
+const MAX_DISTANCE_METERS = Number.isFinite(Number(process.env.MAX_DISTANCE_IN_METERS))
+  ? Number(process.env.MAX_DISTANCE_IN_METERS)
+  : null
 
 export async function POST(request: Request, context: { params: Promise<{ shipmentId: string }> }) {
   const courier = await getUserAddress()
@@ -67,6 +70,16 @@ export async function POST(request: Request, context: { params: Promise<{ shipme
   const plannedDistance = Math.round(
     geodesicDistance(shipment.pickupLat, shipment.pickupLon, shipment.dropLat, shipment.dropLon),
   )
+  if (MAX_DISTANCE_METERS !== null && plannedDistance > MAX_DISTANCE_METERS) {
+    return NextResponse.json(
+      {
+        error: "Route exceeds maximum distance policy",
+        distance: plannedDistance,
+        maxDistance: MAX_DISTANCE_METERS,
+      },
+      { status: 400 },
+    )
+  }
   if (Math.abs(distanceMeters - plannedDistance) > 5) {
     return NextResponse.json({ error: "Distance mismatch" }, { status: 400 })
   }
@@ -83,7 +96,7 @@ export async function POST(request: Request, context: { params: Promise<{ shipme
       latitude: payload.currentLat,
       longitude: payload.currentLon,
       claimed_ts: claimedTimestamp,
-      radius_m: Number.isFinite(Number(payload.radiusM)) ? Number(payload.radiusM) : 5000,
+      radius_m: Number.isFinite(Number(payload.radiusM)) ? Number(payload.radiusM) : 30000,
       shipment_hash: shipmentHash,
       location_hash: locationHash,
       courier_signature: courierSignature,
