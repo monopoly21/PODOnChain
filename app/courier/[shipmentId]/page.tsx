@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react"
 import { BrowserProvider, getAddress, keccak256, toUtf8Bytes, verifyTypedData } from "ethers"
 import type { Account } from "thirdweb"
-import { useActiveAccount } from "thirdweb/react"
+import { ConnectButton, useActiveAccount } from "thirdweb/react"
+import { sepolia } from "thirdweb/chains"
+import { createWallet } from "thirdweb/wallets"
 
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -17,9 +19,11 @@ import {
   type ShipmentTypedDataWithVerify,
 } from "@/lib/shipment-attestation"
 import { geodesicDistance } from "@/lib/geo"
+import { client } from "@/lib/thirdweb"
 
 const SHIPMENT_REGISTRY_ADDRESS = process.env.NEXT_PUBLIC_SHIPMENT_REGISTRY_ADDRESS ?? ""
 const SHIPMENT_CHAIN_ID = Number(process.env.NEXT_PUBLIC_CHAIN_ID ?? "0")
+const CONNECT_WALLETS = [createWallet("io.metamask"), createWallet("com.coinbase.wallet")]
 
 if (!SHIPMENT_REGISTRY_ADDRESS || !SHIPMENT_CHAIN_ID) {
   console.warn("Shipment registry configuration missing – signatures will fail")
@@ -270,7 +274,7 @@ export default function CourierPage({ params }: { params: Promise<{ shipmentId: 
 
   return (
     <main className="min-h-dvh bg-background text-foreground">
-      <div className="mx-auto max-w-xl px-4 py-10 space-y-6">
+      <div className="mx-auto max-w-xl px-4 py-10 space-y-8">
         <header className="space-y-2">
           <h1 className="text-xl font-semibold">Courier proof</h1>
           <p className="text-sm text-muted-foreground">Shipment ID: {routeParams?.shipmentId ?? "…"}</p>
@@ -282,7 +286,16 @@ export default function CourierPage({ params }: { params: Promise<{ shipmentId: 
           )}
         </header>
 
-        <section className="neo-surface space-y-4 p-6">
+        <section className="neo-surface space-y-6 p-7 sm:p-8">
+          {!account && (
+            <div className="space-y-3">
+              <p className="text-sm font-semibold uppercase tracking-wide">Connect wallet</p>
+              <p className="text-xs text-muted-foreground">
+                Authenticate as the assigned courier to submit pickup and drop proofs.
+              </p>
+              <ConnectButton client={client} chain={sepolia} wallets={CONNECT_WALLETS} connectModal={{ size: "compact" }} />
+            </div>
+          )}
           <label className="space-y-1 text-sm">
             <span className="font-medium">Notes (optional)</span>
             <Textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Condition, references…" />
@@ -297,7 +310,7 @@ export default function CourierPage({ params }: { params: Promise<{ shipmentId: 
             </Button>
           </div>
 
-          {log && <pre className="rounded bg-muted p-3 text-xs whitespace-pre-wrap break-words">{log}</pre>}
+          {log && <pre className="rounded bg-muted p-4 text-xs whitespace-pre-wrap break-words">{log}</pre>}
         </section>
 
         {data && data.proofs.length > 0 && (

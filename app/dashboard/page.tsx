@@ -251,28 +251,6 @@ const AGENT_CHAT_CONFIGS: AgentChatConfig[] = [
     },
   },
   {
-    key: "shipment",
-    title: "Shipment assistant",
-    description: "Check shipment assignments and delivery progress.",
-    example: "shipment shp_123",
-    fields: [
-      {
-        name: "shipmentId",
-        label: "Shipment ID",
-        placeholder: "shp_123",
-      },
-    ],
-    defaultMessage: "shipment",
-    messagePlaceholder: "Ask about a shipment…",
-    messageHelper: "Leave blank to send 'shipment &lt;id&gt;'.",
-    buildMessage: ({ message, fields }) => {
-      const trimmed = message.trim()
-      if (trimmed) return trimmed
-      if (!fields.shipmentId?.trim()) return ""
-      return `shipment ${fields.shipmentId.trim()}`
-    },
-  },
-  {
     key: "payments",
     title: "Payments assistant",
     description: "Release escrow once delivery is complete.",

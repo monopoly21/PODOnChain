@@ -2,10 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react"
 import type { Account } from "thirdweb"
-import { useActiveAccount } from "thirdweb/react"
+import { ConnectButton, useActiveAccount } from "thirdweb/react"
 import { getAddress, verifyTypedData } from "ethers"
+import { createWallet } from "thirdweb/wallets"
+import { sepolia } from "thirdweb/chains"
 
 import { Button } from "@/components/ui/button"
+import { client } from "@/lib/thirdweb"
 
 type SessionResponse = {
   session: {
@@ -25,6 +28,8 @@ type SessionResponse = {
     message: Record<string, unknown>
   }
 }
+
+const CONNECT_WALLETS = [createWallet("io.metamask"), createWallet("com.coinbase.wallet")]
 
 export default function SigningPage({
   params: paramsPromise,
@@ -52,6 +57,14 @@ export default function SigningPage({
   const expectedSigner = useMemo(() => sessionData?.session.supplier ?? null, [sessionData])
   const sessionKind = sessionData?.session.kind ?? "pickup"
   const sessionRoleLabel = sessionData?.session.role ?? "supplier"
+  const connectedAddressMatches = useMemo(() => {
+    if (!account || !expectedSigner) return null
+    try {
+      return getAddress(account.address) === getAddress(expectedSigner)
+    } catch {
+      return false
+    }
+  }, [account, expectedSigner])
 
   useEffect(() => {
     if (!token || !resolvedParams) {
@@ -151,7 +164,7 @@ export default function SigningPage({
           </div>
         )}
 
-        {sessionData && !loading && (
+       {sessionData && !loading && (
           <section className="space-y-4 rounded-lg border border-border bg-card p-4">
             <div className="space-y-1 text-sm">
               <Detail label="Order ID" value={sessionData.session.orderId} />
@@ -175,9 +188,31 @@ export default function SigningPage({
               </p>
             </div>
 
-            <Button onClick={handleSign} disabled={loading}>
-              {loading ? "Signing…" : `Sign as ${expectedSigner ?? sessionRoleLabel}`}
-            </Button>
+            {!account ? (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Connect the {sessionRoleLabel} wallet to countersign.
+                </p>
+                <ConnectButton
+                  client={client}
+                  chain={sepolia}
+                  wallets={CONNECT_WALLETS}
+                  connectModal={{ size: "compact" }}
+                />
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {connectedAddressMatches === false && expectedSigner ? (
+                  <div className="rounded-md border border-amber-500/60 bg-amber-200/30 px-3 py-2 text-xs text-amber-900">
+                    Connected wallet {account.address.slice(0, 6)}… does not match the required signer {expectedSigner}. Switch
+                    accounts in your wallet to continue.
+                  </div>
+                ) : null}
+              <Button onClick={handleSign} disabled={loading}>
+                {loading ? "Signing…" : `Sign as ${expectedSigner ?? sessionRoleLabel}`}
+              </Button>
+              </div>
+            )}
           </section>
         )}
       </div>
@@ -217,6 +252,12 @@ async function requestTypedSignature(
 
   if (typeof window === "undefined" || !window.ethereum) {
     throw new Error("Wallet provider unavailable for signature request")
+  }
+
+  try {
+    await window.ethereum.request({ method: "eth_requestAccounts" })
+  } catch (error) {
+    console.warn("Failed to re-request accounts before signing", error)
   }
 
   const payload = JSON.stringify({ domain, types, primaryType, message })
