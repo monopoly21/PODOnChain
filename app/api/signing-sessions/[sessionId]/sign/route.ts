@@ -1,11 +1,19 @@
 import { NextResponse } from "next/server"
 
 import type { Prisma } from "@prisma/client"
+import { getAddress } from "viem"
+
 import { prisma } from "@/lib/prisma"
 import { buildPickupTypedData, buildDropTypedData } from "@/lib/shipment-attestation"
 import { hashToken, verifyMagicLinkToken } from "@/lib/signing-session"
 import { verifyTypedSignature } from "@/lib/verify-signature"
 import { geodesicDistance } from "@/lib/geo"
+import {
+  getDeliveryOracleSigner,
+  getEscrowContract,
+  getOrderRegistryContract,
+  getOrderRegistryWithSigner,
+} from "@/lib/contracts"
 
 const PICKUP_SIGNING_VERIFIER =
   process.env.PICKUP_SIGNING_VERIFIER ?? "0x0000000000000000000000000000000000000000"
@@ -13,6 +21,7 @@ const CHAIN_ID = Number(process.env.NEXT_PUBLIC_CHAIN_ID ?? "0")
 const DEFAULT_RADIUS_METERS = Number.isFinite(Number(process.env.MAX_DISTANCE_IN_METERS))
   ? Number(process.env.MAX_DISTANCE_IN_METERS)
   : 2000
+const REWARD_PER_METER = 10n
 
 export async function POST(
   request: Request,
@@ -285,6 +294,116 @@ async function finalizeDropMilestone({
   const claimedTimestamp = Number(payloadData.claimedTs ?? Math.floor(Date.now() / 1000))
   const now = new Date()
 
+  if (
+    typeof shipment.pickupLat !== "number" ||
+    typeof shipment.pickupLon !== "number" ||
+    typeof shipment.dropLat !== "number" ||
+    typeof shipment.dropLon !== "number"
+  ) {
+    throw new Error("Shipment missing coordinates")
+  }
+
+  if (typeof payloadData.shipmentHash !== "string") {
+    throw new Error("Session payload missing shipment hash")
+  }
+
+  const plannedDistance = Math.round(
+    geodesicDistance(shipment.pickupLat, shipment.pickupLon, shipment.dropLat, shipment.dropLon),
+  )
+
+  const chainOrderIdRaw = payloadData.chainOrderId
+  if (typeof chainOrderIdRaw !== "string" || !chainOrderIdRaw.trim()) {
+    throw new Error("Missing on-chain order identifier")
+  }
+
+  let chainOrderNumeric: bigint
+  try {
+    chainOrderNumeric = chainOrderIdRaw.startsWith("0x")
+      ? BigInt(chainOrderIdRaw)
+      : BigInt(chainOrderIdRaw)
+  } catch (error) {
+    throw new Error("Invalid on-chain order id")
+  }
+
+  const courierAddressRaw = shipment.assignedCourier ?? session.courier
+  let courierAddress: string
+  try {
+    courierAddress = getAddress(courierAddressRaw)
+  } catch (error) {
+    throw new Error("Courier address invalid")
+  }
+
+  const metadata = safeParse(order.metadataRaw)
+  const lineItems = Array.isArray(metadata?.items) ? metadata.items : []
+  const lineItemsJson = JSON.stringify(lineItems)
+  const metadataUri = typeof payloadData.metadataUri === "string" ? payloadData.metadataUri : ""
+
+  const registryContract = getOrderRegistryContract()
+  const escrowContract = getEscrowContract()
+  const oracleSigner = getDeliveryOracleSigner()
+
+  let registeredOracle: string
+  try {
+    registeredOracle = await registryContract.deliveryOracle()
+  } catch (error) {
+    throw new Error("Unable to resolve delivery oracle address on-chain")
+  }
+
+  if (!registeredOracle || registeredOracle === "0x0000000000000000000000000000000000000000") {
+    throw new Error("Order registry oracle address is unset on-chain")
+  }
+
+  if (registeredOracle.toLowerCase() !== oracleSigner.address.toLowerCase()) {
+    throw new Error(
+      `Delivery oracle mismatch: contract expects ${registeredOracle}, env provides ${oracleSigner.address}`,
+    )
+  }
+
+  let supplierAmount = 0n
+  let escrowBalance = 0n
+  try {
+    const onchainOrder = await registryContract.orders(chainOrderNumeric)
+    const onchainAmount =
+      typeof onchainOrder?.amount !== "undefined"
+        ? onchainOrder.amount
+        : Array.isArray(onchainOrder) && typeof onchainOrder[2] !== "undefined"
+          ? onchainOrder[2]
+          : 0n
+    supplierAmount = BigInt(onchainAmount)
+    const escrowedValue = await escrowContract.escrowed(chainOrderNumeric)
+    escrowBalance = typeof escrowedValue === "bigint" ? escrowedValue : BigInt(escrowedValue ?? 0)
+  } catch (error) {
+    throw new Error("Failed to read on-chain order state")
+  }
+
+  if (escrowBalance < supplierAmount) {
+    throw new Error("Escrow underfunded for supplier payout")
+  }
+
+  const maxReward = escrowBalance > supplierAmount ? escrowBalance - supplierAmount : 0n
+  let rewardAmount = BigInt(plannedDistance) * REWARD_PER_METER
+  if (rewardAmount > maxReward) {
+    rewardAmount = maxReward
+  }
+
+  const registry = getOrderRegistryWithSigner()
+  let escrowTxHash: string | null = null
+  try {
+    const tx = await registry.releaseEscrowWithReward(
+      chainOrderNumeric,
+      courierAddress,
+      rewardAmount,
+      payloadData.shipmentHash,
+      lineItemsJson,
+      metadataUri,
+    )
+    const receipt = await tx.wait()
+    escrowTxHash = receipt?.hash ?? tx.hash
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to release escrow"
+    throw new Error(`Escrow release failed: ${message}`)
+  }
+
   await prisma.$transaction(async (tx) => {
     await tx.proof.create({
       data: {
@@ -299,12 +418,22 @@ async function finalizeDropMilestone({
       },
     })
 
+    const shipmentMeta = {
+      ...(safeParse(shipment.metadataRaw) ?? {}),
+      dropPendingSignature: false,
+      courierRewardPaid: Number(rewardAmount) / 1_000_000,
+      courierRewardTx: escrowTxHash,
+      dropMetadataUri: metadataUri || undefined,
+      dropPlannedDistance: plannedDistance,
+    }
+
     await tx.shipment.update({
       where: { id: shipment.id },
       data: {
         status: "Delivered",
         deliveredAt: now,
         updatedAt: now,
+        metadataRaw: JSON.stringify(shipmentMeta),
       },
     })
 
@@ -314,6 +443,11 @@ async function finalizeDropMilestone({
         status: "Delivered",
         completedAt: now,
         updatedAt: now,
+        metadataRaw: JSON.stringify({
+          ...(metadata ?? {}),
+          escrowReleaseTx: escrowTxHash,
+          dropPendingBuyerSignature: false,
+        }),
       },
     })
 
@@ -327,14 +461,14 @@ async function finalizeDropMilestone({
         where: { id: existingPayment.id },
         data: {
           status: "Released",
-          releaseTx: existingPayment.releaseTx ?? null,
+          releaseTx: escrowTxHash,
           updatedAt: now,
         },
       })
     }
   })
 
-  return null
+  return escrowTxHash
 }
 
 async function incrementBuyerInventory(

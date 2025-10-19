@@ -35,6 +35,7 @@ export interface OrderRegistryInterface extends Interface {
       | "owner"
       | "releaseEscrow"
       | "releaseEscrowFromShipment"
+      | "releaseEscrowWithReward"
       | "resolveDispute"
       | "setOracle"
       | "setShipmentRegistry"
@@ -43,6 +44,7 @@ export interface OrderRegistryInterface extends Interface {
 
   getEvent(
     nameOrSignatureOrTopic:
+      | "BillIssued"
       | "OracleUpdated"
       | "OrderCreated"
       | "ShipmentRegistryUpdated"
@@ -78,6 +80,10 @@ export interface OrderRegistryInterface extends Interface {
   encodeFunctionData(
     functionFragment: "releaseEscrowFromShipment",
     values: [BigNumberish, AddressLike, BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "releaseEscrowWithReward",
+    values: [BigNumberish, AddressLike, BigNumberish, BytesLike, string, string]
   ): string;
   encodeFunctionData(
     functionFragment: "resolveDispute",
@@ -121,6 +127,10 @@ export interface OrderRegistryInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "releaseEscrowWithReward",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "resolveDispute",
     data: BytesLike
   ): Result;
@@ -133,6 +143,49 @@ export interface OrderRegistryInterface extends Interface {
     functionFragment: "shipmentRegistry",
     data: BytesLike
   ): Result;
+}
+
+export namespace BillIssuedEvent {
+  export type InputTuple = [
+    orderId: BigNumberish,
+    shipmentId: BytesLike,
+    buyer: AddressLike,
+    supplier: AddressLike,
+    courier: AddressLike,
+    supplierAmount: BigNumberish,
+    courierAmount: BigNumberish,
+    lineItems: string,
+    metadataUri: string,
+    timestamp: BigNumberish
+  ];
+  export type OutputTuple = [
+    orderId: bigint,
+    shipmentId: string,
+    buyer: string,
+    supplier: string,
+    courier: string,
+    supplierAmount: bigint,
+    courierAmount: bigint,
+    lineItems: string,
+    metadataUri: string,
+    timestamp: bigint
+  ];
+  export interface OutputObject {
+    orderId: bigint;
+    shipmentId: string;
+    buyer: string;
+    supplier: string;
+    courier: string;
+    supplierAmount: bigint;
+    courierAmount: bigint;
+    lineItems: string;
+    metadataUri: string;
+    timestamp: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
 }
 
 export namespace OracleUpdatedEvent {
@@ -294,6 +347,19 @@ export interface OrderRegistry extends BaseContract {
     "nonpayable"
   >;
 
+  releaseEscrowWithReward: TypedContractMethod<
+    [
+      orderId: BigNumberish,
+      courier: AddressLike,
+      courierReward: BigNumberish,
+      shipmentId: BytesLike,
+      lineItems: string,
+      metadataUri: string
+    ],
+    [void],
+    "nonpayable"
+  >;
+
   resolveDispute: TypedContractMethod<
     [orderId: BigNumberish, releaseToSupplier: boolean],
     [void],
@@ -366,6 +432,20 @@ export interface OrderRegistry extends BaseContract {
     "nonpayable"
   >;
   getFunction(
+    nameOrSignature: "releaseEscrowWithReward"
+  ): TypedContractMethod<
+    [
+      orderId: BigNumberish,
+      courier: AddressLike,
+      courierReward: BigNumberish,
+      shipmentId: BytesLike,
+      lineItems: string,
+      metadataUri: string
+    ],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
     nameOrSignature: "resolveDispute"
   ): TypedContractMethod<
     [orderId: BigNumberish, releaseToSupplier: boolean],
@@ -382,6 +462,13 @@ export interface OrderRegistry extends BaseContract {
     nameOrSignature: "shipmentRegistry"
   ): TypedContractMethod<[], [string], "view">;
 
+  getEvent(
+    key: "BillIssued"
+  ): TypedContractEvent<
+    BillIssuedEvent.InputTuple,
+    BillIssuedEvent.OutputTuple,
+    BillIssuedEvent.OutputObject
+  >;
   getEvent(
     key: "OracleUpdated"
   ): TypedContractEvent<
@@ -412,6 +499,17 @@ export interface OrderRegistry extends BaseContract {
   >;
 
   filters: {
+    "BillIssued(uint256,bytes32,address,address,address,uint256,uint256,string,string,uint256)": TypedContractEvent<
+      BillIssuedEvent.InputTuple,
+      BillIssuedEvent.OutputTuple,
+      BillIssuedEvent.OutputObject
+    >;
+    BillIssued: TypedContractEvent<
+      BillIssuedEvent.InputTuple,
+      BillIssuedEvent.OutputTuple,
+      BillIssuedEvent.OutputObject
+    >;
+
     "OracleUpdated(address)": TypedContractEvent<
       OracleUpdatedEvent.InputTuple,
       OracleUpdatedEvent.OutputTuple,

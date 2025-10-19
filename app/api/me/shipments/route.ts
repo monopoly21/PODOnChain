@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server"
 import { getUserAddress } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { geodesicDistance } from "@/lib/geo"
 
 export const runtime = "nodejs"
+
+const REWARD_PER_METER = 10n
 
 type ShipmentRecord = Awaited<ReturnType<typeof prisma.shipment.findMany>>[number]
 
@@ -162,6 +165,9 @@ export async function POST(request: Request) {
   const dueDate = body.dueBy ? new Date(body.dueBy) : new Date(Date.now() + 72 * 3600 * 1000)
   const chainOrderId = metadata?.chainOrderId
 
+  const plannedDistance = Math.round(geodesicDistance(pickupLatValue, pickupLonValue, dropLatValue, dropLonValue))
+  const rewardEstimate = Number((BigInt(plannedDistance) * REWARD_PER_METER) / 1_000_000n)
+
   const shipmentMetadataBase =
     typeof body.metadata === "string"
       ? safeParse(body.metadata)
@@ -169,15 +175,18 @@ export async function POST(request: Request) {
         ? body.metadata
         : undefined
 
-  const shipmentMetadata =
-    chainOrderId !== undefined
-      ? { ...(shipmentMetadataBase ?? {}), chainOrderId }
-      : shipmentMetadataBase
+  const shipmentMetadata = {
+    ...(shipmentMetadataBase ?? {}),
+    ...(chainOrderId !== undefined ? { chainOrderId } : {}),
+    courierRewardEstimate: rewardEstimate,
+    courierRewardCurrency: "PYUSD",
+  }
 
   const orderMetadataUpdate: Record<string, any> = {
     ...metadata,
     pickup: { lat: pickupLatValue, lon: pickupLonValue },
     drop: { lat: dropLatValue, lon: dropLonValue },
+    courierRewardEstimate: rewardEstimate,
   }
 
   const assignedCourier = normaliseAddress(body.assignedCourier ?? null) ?? null
@@ -196,6 +205,13 @@ export async function POST(request: Request) {
       assignedCourier,
       status: "Created",
       metadataRaw: shipmentMetadata ? JSON.stringify(shipmentMetadata) : null,
+    },
+  })
+
+  await prisma.order.update({
+    where: { id: order.id },
+    data: {
+      metadataRaw: JSON.stringify(orderMetadataUpdate),
     },
   })
 

@@ -5,6 +5,7 @@ const REQUIRED_ENV = [
   "ESCROW_PYUSD_ADDRESS",
   "ORDER_REGISTRY_ADDRESS",
   "SHIPMENT_REGISTRY_ADDRESS",
+  "DELIVERY_ORACLE_PRIVATE_KEY",
 ]
 
 function ensureEnv() {
@@ -26,6 +27,8 @@ export const orderRegistryAbi = [
   "function markDisputed(uint256 orderId) external",
   "function releaseEscrow(uint256 orderId) external",
   "function releaseEscrowFromShipment(uint256 orderId, address courier, uint256 courierReward) external",
+  "function releaseEscrowWithReward(uint256 orderId, address courier, uint256 courierReward, bytes32 shipmentId, string lineItems, string metadataUri) external",
+  "function deliveryOracle() view returns (address)",
   "function orders(uint256) view returns (address buyer, address supplier, uint256 amount, uint8 status)",
 ]
 
@@ -41,6 +44,7 @@ export const shipmentRegistryAbi = [
 ]
 
 let cachedProvider: ethers.JsonRpcProvider | null = null
+let cachedSigner: ethers.Wallet | null = null
 
 export function getProvider() {
   if (!cachedProvider) {
@@ -60,4 +64,16 @@ export function getOrderRegistryContract() {
 
 export function getShipmentRegistryContract() {
   return new ethers.Contract(process.env.SHIPMENT_REGISTRY_ADDRESS!, shipmentRegistryAbi, getProvider())
+}
+
+export function getDeliveryOracleSigner() {
+  if (!cachedSigner) {
+    ensureEnv()
+    cachedSigner = new ethers.Wallet(process.env.DELIVERY_ORACLE_PRIVATE_KEY!, getProvider())
+  }
+  return cachedSigner
+}
+
+export function getOrderRegistryWithSigner() {
+  return getOrderRegistryContract().connect(getDeliveryOracleSigner())
 }

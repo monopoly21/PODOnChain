@@ -20,7 +20,7 @@ export default function LandingPage() {
         <div className="grid gap-12 lg:grid-cols-[1.1fr_0.9fr] lg:items-start">
           <div className="space-y-6">
             <h1 className="text-balance text-4xl font-black leading-tight tracking-tight text-foreground sm:text-5xl lg:text-6xl">
-              Bold, agentic control for supply chains that refuse to slip.
+              Bold, wallet-native control for supply chains that refuse to slip.
             </h1>
             <p className="max-w-2xl text-lg leading-relaxed text-muted-foreground lg:text-xl">
               PODx fuses programmable escrow, attested pickups, and real-time delivery geofence checks into a single
@@ -50,8 +50,8 @@ export default function LandingPage() {
                 and hashed on-chain.
               </li>
               <li>
-                <span className="font-semibold text-primary">Agent automations:</span> inventory, payments, and dispute
-                playbooks respond in real-time.
+                <span className="font-semibold text-primary">Programmable workflows:</span> inventory, payments, and
+                dispute playbooks respond in real-time.
               </li>
               <li>
                 <span className="font-semibold text-primary">Zero guesswork:</span> courier location proofs and chain
@@ -83,10 +83,10 @@ export default function LandingPage() {
               <p className="neo-badge inline-flex items-center gap-2 text-xs">
                 Courier, Supplier & Buyer orchestration
               </p>
-              <h2 className="mt-3 text-2xl font-bold uppercase tracking-tight">How automations fire in PODx</h2>
+              <h2 className="mt-3 text-2xl font-bold uppercase tracking-tight">How PODx keeps every persona in sync</h2>
             </div>
             <p className="max-w-md text-sm text-muted-foreground">
-              Agents watch every milestone. Trigger proofs, update inventory, and release funds without waiting on
+              The control tower watches every milestone. Trigger proofs, update inventory, and release funds without
               spreadsheets or manual reconciliations.
             </p>
           </header>
@@ -96,7 +96,7 @@ export default function LandingPage() {
         <div className="grid w-full gap-4 md:grid-cols-3">
           <Feature
             title="Buyer cockpit"
-            items={["Self-serve catalog imports", "Escrowed purchase orders", "Inventory agents on call"]}
+            items={["Self-serve catalog imports", "Escrowed purchase orders", "Live inventory sync"]}
           />
           <Feature
             title="Supplier vault"

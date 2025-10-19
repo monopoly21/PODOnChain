@@ -31,6 +31,18 @@ contract OrderRegistry {
   event StatusUpdated(uint256 indexed orderId, Status status);
   event OracleUpdated(address indexed oracle);
   event ShipmentRegistryUpdated(address indexed shipmentRegistry);
+  event BillIssued(
+    uint256 indexed orderId,
+    bytes32 indexed shipmentId,
+    address buyer,
+    address supplier,
+    address courier,
+    uint256 supplierAmount,
+    uint256 courierAmount,
+    string lineItems,
+    string metadataUri,
+    uint256 timestamp
+  );
 
   modifier onlyOwner() {
     require(msg.sender == owner, "not owner");
@@ -121,20 +133,57 @@ contract OrderRegistry {
   }
 
   function releaseEscrowFromShipment(uint256 orderId, address courier, uint256 courierReward) external onlyShipmentRegistry {
+    _releaseEscrow(orderId, courier, courierReward, bytes32(0), "", "");
+  }
+
+  function releaseEscrowWithReward(
+    uint256 orderId,
+    address courier,
+    uint256 courierReward,
+    bytes32 shipmentId,
+    string calldata lineItems,
+    string calldata metadataUri
+  ) external onlyOracle {
+    _releaseEscrow(orderId, courier, courierReward, shipmentId, lineItems, metadataUri);
+  }
+
+  function _releaseEscrow(
+    uint256 orderId,
+    address courier,
+    uint256 courierReward,
+    bytes32 shipmentId,
+    string memory lineItems,
+    string memory metadataUri
+  ) internal {
     Order storage order = orders[orderId];
     require(order.status == Status.Funded, "not funded");
     EscrowPYUSD paymaster = EscrowPYUSD(escrow);
-    uint256 amount = order.amount;
+    uint256 supplierAmount = order.amount;
+    uint256 escrowBalance = paymaster.escrowed(orderId);
+    require(escrowBalance >= supplierAmount + courierReward, "insufficient escrow");
+
     if (courierReward > 0) {
-      require(amount >= courierReward, "reward exceeds escrow");
       paymaster.release(orderId, courier, courierReward);
-      amount -= courierReward;
     }
-    if (amount > 0) {
-      paymaster.release(orderId, order.supplier, amount);
+    if (supplierAmount > 0) {
+      paymaster.release(orderId, order.supplier, supplierAmount);
     }
+
     order.amount = 0;
     order.status = Status.Delivered;
+
     emit StatusUpdated(orderId, Status.Delivered);
+    emit BillIssued(
+      orderId,
+      shipmentId,
+      order.buyer,
+      order.supplier,
+      courier,
+      supplierAmount,
+      courierReward,
+      lineItems,
+      metadataUri,
+      block.timestamp
+    );
   }
 }

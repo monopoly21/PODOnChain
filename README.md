@@ -59,8 +59,9 @@ Each wallet owns its own catalog; switch wallets (cookie/localStorage) to act as
 ## Dashboard highlights (`/dashboard`)
 
 - **Buyer tab**: load public supplier price list by wallet address, enter quantities, sign an on-chain `OrderRegistry.createOrder` transaction, and then mark escrow funded.
-- **Supplier tab**: review incoming orders, approve, capture funded orders to create shipments (pickup/drop coords + optional assigned courier), view shipment roster, and open courier links.
+- **Supplier tab**: review incoming orders, approve, capture funded orders to create shipments (pickup/drop coords + optional assigned courier), escrow the courier incentive (distance × 0.00001 PYUSD) up front, and auto-pay a 1% platform fee, then view shipment roster and open courier links.
 - **Courier tab**: list assigned or allowlisted shipments, claim open jobs, and jump into the `/courier/[shipmentId]` proof workflow.
+- **Automated settlement**: drop confirmation (courier + buyer signatures) triggers on-chain escrow release via `releaseEscrowWithReward`, paying the supplier and courier, minting the platform fee on both sides, and emitting a `BillIssued` event for downstream indexing (Blockscout/Envio).
 
 ## Courier proof flow
 
@@ -106,6 +107,6 @@ NEXT_PUBLIC_ORDER_REGISTRY_ADDRESS="0x..."
 
 - Swap the cookie/header auth stub in `lib/thirdweb.ts` with official thirdweb Auth (SIWE).
 - Extend the geofence checks with your preferred location oracle or proof service if you need stronger guarantees.
-- (v2) Add uAgents + ASI:One chat tools using the same REST APIs (`/api/me/...`).
+- Explore optional automation hooks (webhooks, serverless jobs) using the same REST APIs (`/api/me/...`).
 
 The current repo is ready for hackathon demos: CSV ingestion, wallet-scoped data, dashboards, courier flow with geofence checks, and contracts ready to deploy.

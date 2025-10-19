@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { DashboardTabs } from "@/components/DashboardTabs"
 import { cn } from "@/lib/utils"
+import { geodesicDistance } from "@/lib/geo"
 import {
   claimShipment,
   createOrder,
@@ -56,6 +57,16 @@ const erc20Abi = [
     ],
     outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
     stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "transfer",
+    inputs: [
+      { name: "to", type: "address", internalType: "address" },
+      { name: "amount", type: "uint256", internalType: "uint256" },
+    ],
+    outputs: [{ name: "", type: "bool", internalType: "bool" }],
+    stateMutability: "nonpayable",
   },
   {
     type: "error",
@@ -172,6 +183,17 @@ const PYUSD_ADDRESS = process.env.NEXT_PUBLIC_PYUSD_ADDRESS || ""
 const ESCROW_ADDRESS = process.env.NEXT_PUBLIC_ESCROW_PYUSD_ADDRESS || ""
 const ORDER_REGISTRY_ADDRESS = process.env.NEXT_PUBLIC_ORDER_REGISTRY_ADDRESS || ""
 const PYUSD_DECIMALS = Number(process.env.NEXT_PUBLIC_PYUSD_DECIMALS || 6)
+const COURIER_REWARD_RATE = 0.00001
+const PLATFORM_FEE_FLAT = 0.01
+const PLATFORM_FEE_ADDRESS = process.env.NEXT_PUBLIC_PLATFORM_FEE_ADDRESS || ""
+const COURIER_REWARD_UNITS_PER_METER = BigInt(Math.round(COURIER_REWARD_RATE * Math.pow(10, PYUSD_DECIMALS)))
+
+function formatTokenAmount(amount: bigint, decimals: number, precision = 4) {
+  if (amount === 0n) return (0).toFixed(precision)
+  const base = Math.min(decimals, 12)
+  const scaled = Number(amount) / 10 ** base / Math.pow(10, decimals - base)
+  return scaled.toFixed(precision)
+}
 
 function toTokenAmount(amount: number, decimals: number) {
   const fixed = amount.toFixed(decimals)
@@ -659,6 +681,28 @@ export default function DashboardPage() {
       return
     }
 
+    const pickup = order.metadata?.pickup
+    const drop = order.metadata?.drop
+
+    let courierRewardUnits = 0n
+    if (
+      pickup &&
+      drop &&
+      typeof pickup.lat === "number" &&
+      typeof pickup.lon === "number" &&
+      typeof drop.lat === "number" &&
+      typeof drop.lon === "number" &&
+      Number.isFinite(pickup.lat) &&
+      Number.isFinite(pickup.lon) &&
+      Number.isFinite(drop.lat) &&
+      Number.isFinite(drop.lon)
+    ) {
+      const plannedDistanceMeters = Math.round(geodesicDistance(pickup.lat, pickup.lon, drop.lat, drop.lon))
+      if (plannedDistanceMeters > 0 && COURIER_REWARD_UNITS_PER_METER > 0n) {
+        courierRewardUnits = BigInt(plannedDistanceMeters) * COURIER_REWARD_UNITS_PER_METER
+      }
+    }
+
     try {
       setFundingOrderId(order.id)
 
@@ -669,6 +713,11 @@ export default function DashboardPage() {
       const amount = toTokenAmount(totalAmount, PYUSD_DECIMALS)
       if (amount <= 0n) {
         throw new Error("Order amount too small to fund")
+      }
+
+      const totalEscrowDeposit = amount + courierRewardUnits
+      if (totalEscrowDeposit <= 0n) {
+        throw new Error("Escrow deposit amount is zero")
       }
 
       const onchainOrder = await readContract({
@@ -696,11 +745,11 @@ export default function DashboardPage() {
         params: [buyerAddress, ESCROW_ADDRESS],
       })
       const allowance = toBigInt(allowanceResult)
-      if (allowance < amount) {
+      if (allowance < totalEscrowDeposit) {
         const approveTx = prepareContractCall({
           contract: tokenContract,
           method: "approve",
-          params: [ESCROW_ADDRESS, amount],
+          params: [ESCROW_ADDRESS, totalEscrowDeposit],
         })
         const approveResult: any = await sendTransactionAsync(approveTx)
         approvalTxHash = approveResult?.transactionHash ?? approveResult?.hash
@@ -713,7 +762,7 @@ export default function DashboardPage() {
       const fundTx = prepareContractCall({
         contract: escrowContract,
         method: "fund",
-        params: [chainOrderId, amount],
+        params: [chainOrderId, totalEscrowDeposit],
       })
       const fundResult: any = await sendTransactionAsync(fundTx)
 
@@ -732,7 +781,14 @@ export default function DashboardPage() {
         approvalTxHash,
       })
 
-      toast({ title: "Escrow funded", description: "PYUSD transferred to escrow." })
+      toast({
+        title: "Escrow funded",
+        description: `Deposited ${formatTokenAmount(totalEscrowDeposit, PYUSD_DECIMALS, 4)} PYUSD into escrow${
+          courierRewardUnits > 0n
+            ? ` (includes ${formatTokenAmount(courierRewardUnits, PYUSD_DECIMALS, 4)} courier reward)`
+            : ""
+        }.`,
+      })
     } catch (error) {
       console.error("Failed to fund escrow", error)
       const friendly = getFriendlyTxError(error)
@@ -775,6 +831,34 @@ export default function DashboardPage() {
         return
       }
 
+      const plannedDistanceMeters = geodesicDistance(pickupLatValue, pickupLonValue, dropLatValue, dropLonValue)
+      const courierRewardEstimate = plannedDistanceMeters * COURIER_REWARD_RATE
+
+      if (!PLATFORM_FEE_ADDRESS) {
+        throw new Error("Set NEXT_PUBLIC_PLATFORM_FEE_ADDRESS before creating shipments")
+      }
+      const platformFeeAmount = toTokenAmount(PLATFORM_FEE_FLAT, PYUSD_DECIMALS)
+      if (platformFeeAmount <= 0n) {
+        throw new Error("Platform fee is configured to zero; update NEXT_PUBLIC_PYUSD_DECIMALS or fee value")
+      }
+      if (!PYUSD_ADDRESS) {
+        throw new Error("Set NEXT_PUBLIC_PYUSD_ADDRESS to pay the platform fee")
+      }
+      if (!account?.address) {
+        throw new Error("Connect your wallet to pay the platform fee")
+      }
+      const tokenContractForFee = getContract({ client, address: PYUSD_ADDRESS, abi: erc20Abi, chain: sepolia })
+      const transferFeeTx = prepareContractCall({
+        contract: tokenContractForFee,
+        method: "transfer",
+        params: [PLATFORM_FEE_ADDRESS, platformFeeAmount],
+      })
+      await sendTransactionAsync(transferFeeTx)
+      toast({
+        title: "Platform fee paid",
+        description: `Transferred ${formatTokenAmount(platformFeeAmount, PYUSD_DECIMALS, 2)} PYUSD to the platform.`,
+      })
+
       await createShipment({
         orderId: shipmentFormOrder.id,
         shipmentNo: Number(shipmentForm.shipmentNo || Date.now()),
@@ -786,6 +870,92 @@ export default function DashboardPage() {
         dueBy: shipmentForm.dueBy || new Date(Date.now() + 72 * 3600 * 1000).toISOString(),
         assignedCourier: shipmentForm.assignedCourier || undefined,
       })
+
+      const chainOrderIdValue = shipmentFormOrder.metadata?.chainOrderId
+      if (chainOrderIdValue && courierRewardEstimate > 0) {
+        if (!PYUSD_ADDRESS || !ESCROW_ADDRESS) {
+          toast({
+            title: "Missing configuration",
+            description: "Set NEXT_PUBLIC_PYUSD_ADDRESS and NEXT_PUBLIC_ESCROW_PYUSD_ADDRESS to fund courier rewards.",
+            variant: "destructive",
+          })
+        } else if (!account?.address) {
+          toast({ title: "Connect wallet", description: "Connect your wallet to deposit the courier reward.", variant: "destructive" })
+        } else {
+          try {
+            const tokenContract = getContract({ client, address: PYUSD_ADDRESS, abi: erc20Abi, chain: sepolia })
+            const escrowContract = getContract({ client, address: ESCROW_ADDRESS, abi: escrowContractAbi, chain: sepolia })
+
+            const rewardAmount = toTokenAmount(courierRewardEstimate, PYUSD_DECIMALS)
+            if (rewardAmount > 0n) {
+              const allowanceResult = await readContract({
+                contract: tokenContract,
+                method: "allowance",
+                params: [account.address, ESCROW_ADDRESS],
+              })
+              const currentAllowance = toBigInt(allowanceResult)
+              let onChainOrderId: bigint
+              if (typeof chainOrderIdValue === "number") {
+                onChainOrderId = BigInt(chainOrderIdValue)
+              } else if (typeof chainOrderIdValue === "string") {
+                onChainOrderId = chainOrderIdValue.startsWith("0x")
+                  ? BigInt(chainOrderIdValue)
+                  : BigInt(chainOrderIdValue)
+              } else {
+                throw new Error("Invalid chain order id")
+              }
+
+              const orderAmountUnits = toTokenAmount(Number(shipmentFormOrder.totalAmount ?? 0), PYUSD_DECIMALS)
+              const expectedEscrow = orderAmountUnits + rewardAmount
+              const currentEscrowed = toBigInt(
+                await readContract({
+                  contract: escrowContract,
+                  method: "escrowed",
+                  params: [onChainOrderId],
+                }),
+              )
+
+              const outstanding = expectedEscrow > currentEscrowed ? expectedEscrow - currentEscrowed : 0n
+              if (outstanding === 0n) {
+                toast({
+                  title: "Courier reward escrowed",
+                  description: "Escrow already covers the courier reward. No additional deposit needed.",
+                })
+              } else {
+                if (currentAllowance < outstanding) {
+                  const approveTx = prepareContractCall({
+                    contract: tokenContract,
+                    method: "approve",
+                    params: [ESCROW_ADDRESS, outstanding],
+                  })
+                  await sendTransactionAsync(approveTx)
+                }
+
+                const fundRewardTx = prepareContractCall({
+                  contract: escrowContract,
+                  method: "fund",
+                  params: [onChainOrderId, outstanding],
+                })
+                await sendTransactionAsync(fundRewardTx)
+
+                toast({
+                  title: "Courier reward escrowed",
+                  description: `Deposited ${formatTokenAmount(outstanding, PYUSD_DECIMALS, 4)} PYUSD to cover the courier incentive.`,
+                })
+              }
+            }
+          } catch (error) {
+            console.error("Failed to fund courier reward", error)
+            toast({
+              title: "Courier reward funding failed",
+              description:
+                error instanceof Error ? error.message : "Unable to deposit courier incentive. Please ensure your PYUSD allowance is set and retry.",
+              variant: "destructive",
+            })
+          }
+        }
+      }
+
       setShipmentMessage("Shipment created.")
       setShipmentFormOrder(null)
       setShipmentForm({
@@ -855,7 +1025,7 @@ export default function DashboardPage() {
             Connected buyer: <span className="font-mono text-sm">{account.address}</span>
           </p>
           <p className="text-sm text-muted-foreground">
-            Add SKUs, tune reorder thresholds, or set live inventory levels. Updates propagate to the agents instantly.
+            Add SKUs, tune reorder thresholds, or set live inventory levels. Updates propagate across the control tower instantly.
           </p>
         </header>
         <div className="space-y-6">

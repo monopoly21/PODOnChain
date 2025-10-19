@@ -45,7 +45,7 @@ contract ShipmentRegistry is EIP712 {
 
   address public immutable owner;
   address public immutable orderRegistry;
-  uint256 public constant REWARD_PER_METER = 100; // 0.0001 units with 6 decimals
+  uint256 public constant REWARD_PER_METER = 10; // 0.00001 units with 6 decimals
 
   bytes32 private constant PICKUP_TYPEHASH =
     keccak256(

@@ -95,8 +95,8 @@ export function BrandSidebar({ onNavigate, variant = "desktop" }: BrandSidebarPr
           PODx
         </Link>
         <p className="max-w-xs text-sm font-medium leading-relaxed text-muted-foreground">
-          Agentic orchestration for trustless supply chains. Monitor orders, automate disputes, and release escrow with
-          geo-proof.
+          Wallet-native orchestration for trustless supply chains. Monitor orders, automate disputes, and release
+          escrow with geo-proof.
         </p>
 
         <nav className="space-y-2">
@@ -123,7 +123,7 @@ export function BrandSidebar({ onNavigate, variant = "desktop" }: BrandSidebarPr
 
         <div className="neo-pill inline-flex items-center gap-2 text-xs">
           <span className="size-2 rounded-full bg-emerald-500" />
-          {account ? "Agents online" : "Guest mode"}
+          {account ? "Control tower linked" : "Guest mode"}
         </div>
       </div>
 
