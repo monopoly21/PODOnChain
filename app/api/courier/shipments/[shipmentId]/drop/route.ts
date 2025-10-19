@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server"
 
+import type { Prisma } from "@prisma/client"
+
 import { prisma } from "@/lib/prisma"
 import { getUserAddress } from "@/lib/auth"
 import { geodesicDistance } from "@/lib/geo"
 
 export const runtime = "nodejs"
 
-const AGENT_BRIDGE_URL = process.env.AGENT_BRIDGE_URL || "http://localhost:8200"
 const MAX_DISTANCE_METERS = Number.isFinite(Number(process.env.MAX_DISTANCE_IN_METERS))
   ? Number(process.env.MAX_DISTANCE_IN_METERS)
   : null
@@ -84,47 +85,63 @@ export async function POST(request: Request, context: { params: Promise<{ shipme
     return NextResponse.json({ error: "Distance mismatch" }, { status: 400 })
   }
 
-  const response = await fetch(`${AGENT_BRIDGE_URL}/shipments/milestone`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      shipment_id: shipment.id,
-      shipment_no: shipment.shipmentNo,
-      order_id: shipment.orderId,
-      milestone: "Delivered",
-      courier_wallet: courier,
-      latitude: payload.currentLat,
-      longitude: payload.currentLon,
-      claimed_ts: claimedTimestamp,
-      radius_m: Number.isFinite(Number(payload.radiusM)) ? Number(payload.radiusM) : 30000,
-      shipment_hash: shipmentHash,
-      location_hash: locationHash,
-      courier_signature: courierSignature,
-      buyer_signature: buyerSignature,
-      distance_meters: distanceMeters,
-      chain_order_id: orderChainId,
-    }),
+  const now = new Date()
+
+  const updatedShipment = await prisma.$transaction(async (tx) => {
+    await tx.proof.create({
+      data: {
+        shipmentNo: shipment.shipmentNo,
+        kind: "drop",
+        signer: courier,
+        claimedTs: claimedTimestamp,
+        photoHash: typeof payload.photoHash === "string" ? payload.photoHash : null,
+        photoCid: typeof payload.photoCid === "string" ? payload.photoCid : null,
+        litDistance: distanceMeters,
+        litOk: true,
+      },
+    })
+
+    const shipmentUpdate = await tx.shipment.update({
+      where: { id: shipment.id },
+      data: {
+        status: "Delivered",
+        deliveredAt: now,
+        updatedAt: now,
+      },
+    })
+
+    await tx.order.update({
+      where: { id: order.id },
+      data: {
+        status: "Delivered",
+        completedAt: now,
+        updatedAt: now,
+      },
+    })
+
+    await incrementBuyerInventory(tx, order)
+
+    const existingPayment = await tx.payment.findFirst({
+      where: { orderId: order.id, payer: order.buyer, payee: order.supplier },
+    })
+    if (existingPayment) {
+      await tx.payment.update({
+        where: { id: existingPayment.id },
+        data: {
+          status: "Released",
+          releaseTx: existingPayment.releaseTx ?? null,
+          updatedAt: now,
+        },
+      })
+    }
+
+    return shipmentUpdate
   })
-
-  if (!response.ok) {
-    const details = await response.json().catch(() => null)
-    return NextResponse.json(
-      { error: "Drop verification failed", details: details ?? undefined },
-      { status: response.status },
-    )
-  }
-
-  const { escrow_tx } = await response.json()
-
-  const updatedShipment = await prisma.shipment.findUnique({ where: { id: shipment.id } })
-  if (!updatedShipment) {
-    return NextResponse.json({ error: "Shipment not found after agent update" }, { status: 500 })
-  }
 
   return NextResponse.json({
     ok: true,
     shipment: serializeShipment(updatedShipment),
-    escrowTx: escrow_tx ?? null,
+    escrowTx: null,
   })
 }
 
@@ -142,5 +159,37 @@ function serializeShipment(shipment: any) {
   return {
     ...rest,
     metadata: metadataRaw ? safeParse(metadataRaw) : null,
+  }
+}
+
+async function incrementBuyerInventory(
+  tx: Prisma.TransactionClient,
+  order: Awaited<ReturnType<typeof prisma.order.findUnique>>,
+) {
+  if (!order) return
+  const metadata = safeParse(order.metadataRaw)
+  const items = Array.isArray(metadata?.items) ? metadata?.items ?? [] : []
+  for (const entry of items) {
+    if (!entry || typeof entry !== "object") continue
+    const skuId = typeof entry.skuId === "string" ? entry.skuId : undefined
+    const qtyValue = entry.qty ?? entry.quantity
+    const quantity = Number(qtyValue)
+    if (!skuId || !Number.isFinite(quantity) || quantity <= 0) continue
+    await tx.product.upsert({
+      where: { owner_skuId: { owner: order.buyer, skuId } },
+      update: {
+        targetStock: { increment: Math.round(quantity) },
+        active: true,
+      },
+      create: {
+        owner: order.buyer,
+        skuId,
+        name: skuId,
+        unit: "unit",
+        minThreshold: 0,
+        targetStock: Math.max(0, Math.round(quantity)),
+        active: true,
+      },
+    })
   }
 }

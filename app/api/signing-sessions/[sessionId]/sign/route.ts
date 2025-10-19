@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 
+import type { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { buildPickupTypedData, buildDropTypedData } from "@/lib/shipment-attestation"
 import { hashToken, verifyMagicLinkToken } from "@/lib/signing-session"
@@ -9,7 +10,6 @@ import { geodesicDistance } from "@/lib/geo"
 const PICKUP_SIGNING_VERIFIER =
   process.env.PICKUP_SIGNING_VERIFIER ?? "0x0000000000000000000000000000000000000000"
 const CHAIN_ID = Number(process.env.NEXT_PUBLIC_CHAIN_ID ?? "0")
-const AGENT_BRIDGE_URL = process.env.AGENT_BRIDGE_URL || "http://localhost:8200"
 const DEFAULT_RADIUS_METERS = Number.isFinite(Number(process.env.MAX_DISTANCE_IN_METERS))
   ? Number(process.env.MAX_DISTANCE_IN_METERS)
   : 2000
@@ -168,62 +168,18 @@ export async function POST(
     )
   }
 
-  const milestonePayload =
-    session.kind === "drop"
-      ? {
-          shipment_id: session.shipmentId,
-          shipment_no: payloadData.shipmentNo ?? null,
-          order_id: session.orderId,
-          milestone: "Delivered",
-          courier_wallet: session.courier,
-          latitude: payloadData.currentLat ?? null,
-          longitude: payloadData.currentLon ?? null,
-          claimed_ts: payloadData.claimedTs,
-          radius_m: radiusMeters,
-          shipment_hash: payloadData.shipmentHash,
-          location_hash: typedData.locationHash,
-          courier_signature: session.courierSignature,
-          buyer_signature: body.signature,
-          chain_order_id: session.chainOrderId,
-          notes: payloadData.notes ?? null,
-          distance_meters: payloadData.distanceMeters ?? null,
-          drop_lat: payloadData.dropLat ?? null,
-          drop_lon: payloadData.dropLon ?? null,
-          pickup_lat: payloadData.pickupLat ?? null,
-          pickup_lon: payloadData.pickupLon ?? null,
-        }
-      : {
-          shipment_id: session.shipmentId,
-          shipment_no: payloadData.shipmentNo ?? null,
-          order_id: session.orderId,
-          milestone: "Pickup",
-          courier_wallet: session.courier,
-          latitude: payloadData.currentLat ?? null,
-          longitude: payloadData.currentLon ?? null,
-          claimed_ts: payloadData.claimedTs,
-          radius_m: radiusMeters,
-          shipment_hash: payloadData.shipmentHash,
-          location_hash: typedData.locationHash,
-          courier_signature: session.courierSignature,
-          supplier_signature: body.signature,
-          chain_order_id: session.chainOrderId,
-          notes: payloadData.notes ?? null,
-          pickup_lat: payloadData.pickupLat ?? null,
-          pickup_lon: payloadData.pickupLon ?? null,
-        }
+  let escrowTx: string | null = null
 
-  const agentResponse = await fetch(`${AGENT_BRIDGE_URL}/shipments/milestone`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(milestonePayload),
-  })
-
-  if (!agentResponse.ok) {
-    const detail = await agentResponse.json().catch(() => null)
-    return NextResponse.json(
-      { error: `${session.kind === "drop" ? "Drop" : "Pickup"} verification failed`, details: detail ?? undefined },
-      { status: agentResponse.status },
-    )
+  if (session.kind === "drop") {
+    escrowTx = await finalizeDropMilestone({
+      session,
+      payloadData,
+    })
+  } else {
+    await finalizePickupMilestone({
+      session,
+      payloadData,
+    })
   }
 
   const usedAt = new Date()
@@ -242,10 +198,182 @@ export async function POST(
     }),
   ])
 
-  const detail = await agentResponse.json().catch(() => ({ escrow_tx: null }))
-
   return NextResponse.json({
     ok: true,
-    escrowTx: detail?.escrow_tx ?? null,
+    escrowTx,
   })
+}
+
+async function finalizePickupMilestone({
+  session,
+  payloadData,
+}: {
+  session: Awaited<ReturnType<typeof prisma.signingSession.findFirst>>
+  payloadData: Record<string, any>
+}) {
+  if (!session) {
+    throw new Error("Signing session not found")
+  }
+  const shipment = await prisma.shipment.findUnique({ where: { id: session.shipmentId } })
+  if (!shipment) {
+    throw new Error("Shipment not found")
+  }
+  const order = await prisma.order.findUnique({ where: { id: session.orderId } })
+  if (!order) {
+    throw new Error("Order not found")
+  }
+  const claimedTimestamp = Number(payloadData.claimedTs ?? Math.floor(Date.now() / 1000))
+  const now = new Date()
+
+  await prisma.$transaction(async (tx) => {
+    await tx.proof.create({
+      data: {
+        shipmentNo: shipment.shipmentNo,
+        kind: "pickup-countersign",
+        signer: session.supplier,
+        claimedTs: claimedTimestamp,
+        photoHash: null,
+        photoCid: null,
+        litDistance: payloadData.targetDistance ?? null,
+        litOk: true,
+      },
+    })
+
+    const shipmentUpdate: Record<string, unknown> = {
+      status: "InTransit",
+      pickedUpAt: now,
+      updatedAt: now,
+    }
+    if (!shipment.assignedCourier) {
+      shipmentUpdate.assignedCourier = session.courier
+    }
+
+    await tx.shipment.update({
+      where: { id: shipment.id },
+      data: shipmentUpdate,
+    })
+
+    await tx.order.update({
+      where: { id: order.id },
+      data: {
+        status: "Shipped",
+        updatedAt: now,
+      },
+    })
+  })
+}
+
+async function finalizeDropMilestone({
+  session,
+  payloadData,
+}: {
+  session: Awaited<ReturnType<typeof prisma.signingSession.findFirst>>
+  payloadData: Record<string, any>
+}): Promise<string | null> {
+  if (!session) {
+    throw new Error("Signing session not found")
+  }
+  const shipment = await prisma.shipment.findUnique({ where: { id: session.shipmentId } })
+  if (!shipment) {
+    throw new Error("Shipment not found")
+  }
+  const order = await prisma.order.findUnique({ where: { id: session.orderId } })
+  if (!order) {
+    throw new Error("Order not found")
+  }
+
+  const claimedTimestamp = Number(payloadData.claimedTs ?? Math.floor(Date.now() / 1000))
+  const now = new Date()
+
+  await prisma.$transaction(async (tx) => {
+    await tx.proof.create({
+      data: {
+        shipmentNo: shipment.shipmentNo,
+        kind: "drop-countersign",
+        signer: session.supplier,
+        claimedTs: claimedTimestamp,
+        photoHash: null,
+        photoCid: null,
+        litDistance: payloadData.distanceMeters ?? null,
+        litOk: true,
+      },
+    })
+
+    await tx.shipment.update({
+      where: { id: shipment.id },
+      data: {
+        status: "Delivered",
+        deliveredAt: now,
+        updatedAt: now,
+      },
+    })
+
+    await tx.order.update({
+      where: { id: order.id },
+      data: {
+        status: "Delivered",
+        completedAt: now,
+        updatedAt: now,
+      },
+    })
+
+    await incrementBuyerInventory(tx, order)
+
+    const existingPayment = await tx.payment.findFirst({
+      where: { orderId: order.id, payer: order.buyer, payee: order.supplier },
+    })
+    if (existingPayment) {
+      await tx.payment.update({
+        where: { id: existingPayment.id },
+        data: {
+          status: "Released",
+          releaseTx: existingPayment.releaseTx ?? null,
+          updatedAt: now,
+        },
+      })
+    }
+  })
+
+  return null
+}
+
+async function incrementBuyerInventory(
+  tx: Prisma.TransactionClient,
+  order: Awaited<ReturnType<typeof prisma.order.findUnique>>,
+) {
+  if (!order) return
+  const metadata = safeParse(order.metadataRaw)
+  const items = Array.isArray(metadata?.items) ? metadata.items : []
+  for (const entry of items) {
+    if (!entry || typeof entry !== "object") continue
+    const skuId = typeof entry.skuId === "string" ? entry.skuId : undefined
+    const qtyValue = entry.qty ?? entry.quantity
+    const quantity = Number(qtyValue)
+    if (!skuId || !Number.isFinite(quantity) || quantity <= 0) continue
+    await tx.product.upsert({
+      where: { owner_skuId: { owner: order.buyer, skuId } },
+      update: {
+        targetStock: { increment: Math.round(quantity) },
+        active: true,
+      },
+      create: {
+        owner: order.buyer,
+        skuId,
+        name: skuId,
+        unit: "unit",
+        minThreshold: 0,
+        targetStock: Math.max(0, Math.round(quantity)),
+        active: true,
+      },
+    })
+  }
+}
+
+function safeParse(value: string | null | undefined) {
+  if (!value) return null
+  try {
+    return JSON.parse(value)
+  } catch {
+    return null
+  }
 }

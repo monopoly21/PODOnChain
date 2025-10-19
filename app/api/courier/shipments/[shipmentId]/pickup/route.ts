@@ -5,8 +5,6 @@ import { getUserAddress } from "@/lib/auth"
 
 export const runtime = "nodejs"
 
-const AGENT_BRIDGE_URL = process.env.AGENT_BRIDGE_URL || "http://localhost:8200"
-
 export async function POST(request: Request, context: { params: Promise<{ shipmentId: string }> }) {
   const courier = await getUserAddress()
   const normalizedCourier = courier.toLowerCase()
@@ -49,39 +47,47 @@ export async function POST(request: Request, context: { params: Promise<{ shipme
     return NextResponse.json({ error: "Missing attestation payload" }, { status: 400 })
   }
 
-  const response = await fetch(`${AGENT_BRIDGE_URL}/shipments/milestone`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      shipment_id: shipment.id,
-      shipment_no: shipment.shipmentNo,
-      order_id: shipment.orderId,
-      milestone: "Pickup",
-      courier_wallet: courier,
-      latitude: payload.currentLat,
-      longitude: payload.currentLon,
-      claimed_ts: Number(payload.claimedTs ?? Math.floor(Date.now() / 1000)),
-      radius_m: Number.isFinite(Number(payload.radiusM)) ? Number(payload.radiusM) : 30000,
-      shipment_hash: shipmentHash,
-      location_hash: locationHash,
-      courier_signature: courierSignature,
-      supplier_signature: supplierSignature,
-      chain_order_id: orderChainId,
-    }),
+  const claimedTimestamp = Number(payload.claimedTs ?? Math.floor(Date.now() / 1000))
+  const now = new Date()
+
+  const updatedShipment = await prisma.$transaction(async (tx) => {
+    await tx.proof.create({
+      data: {
+        shipmentNo: shipment.shipmentNo,
+        kind: "pickup",
+        signer: courier,
+        claimedTs: claimedTimestamp,
+        photoHash: typeof payload.photoHash === "string" ? payload.photoHash : null,
+        photoCid: typeof payload.photoCid === "string" ? payload.photoCid : null,
+        litDistance: null,
+        litOk: true,
+      },
+    })
+
+    const shipmentUpdate: Record<string, unknown> = {
+      status: "InTransit",
+      pickedUpAt: now,
+      updatedAt: now,
+    }
+    if (!shipment.assignedCourier) {
+      shipmentUpdate.assignedCourier = courier
+    }
+
+    const updated = await tx.shipment.update({
+      where: { id: shipment.id },
+      data: shipmentUpdate,
+    })
+
+    await tx.order.update({
+      where: { id: shipment.orderId },
+      data: {
+        status: "Shipped",
+        updatedAt: now,
+      },
+    })
+
+    return updated
   })
-
-  if (!response.ok) {
-    const details = await response.json().catch(() => null)
-    return NextResponse.json(
-      { error: "Pickup verification failed", details: details ?? undefined },
-      { status: response.status },
-    )
-  }
-
-  const updatedShipment = await prisma.shipment.findUnique({ where: { id: shipment.id } })
-  if (!updatedShipment) {
-    return NextResponse.json({ error: "Shipment not found after agent update" }, { status: 500 })
-  }
 
   return NextResponse.json({
     ok: true,

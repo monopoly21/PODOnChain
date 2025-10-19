@@ -6,8 +6,6 @@ export const runtime = "nodejs"
 
 type ShipmentRecord = Awaited<ReturnType<typeof prisma.shipment.findMany>>[number]
 
-const AGENT_BRIDGE_URL = process.env.AGENT_BRIDGE_URL || "http://localhost:8200"
-
 function normaliseAddress(value: string | null | undefined) {
   if (!value) return undefined
   const v = value.toLowerCase()
@@ -182,44 +180,40 @@ export async function POST(request: Request) {
     drop: { lat: dropLatValue, lon: dropLonValue },
   }
 
-  const bridgePayload = {
-    order_id: order.id,
-    shipment_no: shipmentNo,
-    supplier_wallet: supplier,
-    buyer_wallet: order.buyer,
-    pickup_lat: pickupLatValue,
-    pickup_lon: pickupLonValue,
-    drop_lat: dropLatValue,
-    drop_lon: dropLonValue,
-    due_by: dueDate.toISOString(),
-    assigned_courier: normaliseAddress(body.assignedCourier ?? null) ?? null,
-    metadata: shipmentMetadata,
-    order_metadata: orderMetadataUpdate,
-  }
+  const assignedCourier = normaliseAddress(body.assignedCourier ?? null) ?? null
 
-  const bridgeResponse = await fetch(`${AGENT_BRIDGE_URL}/shipments/create`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(bridgePayload),
+  const shipment = await prisma.shipment.create({
+    data: {
+      orderId: order.id,
+      shipmentNo,
+      supplier,
+      buyer: order.buyer,
+      pickupLat: pickupLatValue,
+      pickupLon: pickupLonValue,
+      dropLat: dropLatValue,
+      dropLon: dropLonValue,
+      dueBy: dueDate,
+      assignedCourier,
+      status: "Created",
+      metadataRaw: shipmentMetadata ? JSON.stringify(shipmentMetadata) : null,
+    },
   })
 
-  if (!bridgeResponse.ok) {
-    const detail = await bridgeResponse.json().catch(() => null)
-    return NextResponse.json(
-      { error: "Shipment creation failed", details: detail ?? undefined },
-      { status: bridgeResponse.status },
-    )
+  const orderUpdate: Record<string, unknown> = {
+    metadataRaw: JSON.stringify(orderMetadataUpdate),
   }
 
-  const result = await bridgeResponse.json()
-  if (!result?.shipment) {
-    return NextResponse.json(
-      { error: "Bridge response missing shipment data", details: result ?? undefined },
-      { status: 502 },
-    )
+  if (["Approved", "Funded"].includes(order.status)) {
+    orderUpdate.status = "InFulfillment"
+    orderUpdate.updatedAt = new Date()
   }
 
-  return NextResponse.json({ ok: true, shipment: serializeShipment(result.shipment) })
+  await prisma.order.update({
+    where: { id: order.id },
+    data: orderUpdate,
+  })
+
+  return NextResponse.json({ ok: true, shipment: serializeShipment(shipment) })
 }
 
 function serializeShipment(shipment: any) {

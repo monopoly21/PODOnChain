@@ -13,7 +13,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { DashboardTabs } from "@/components/DashboardTabs"
-import { AgentChat, type AgentChatConfig } from "@/components/AgentChat"
 import { cn } from "@/lib/utils"
 import {
   claimShipment,
@@ -174,107 +173,6 @@ const ESCROW_ADDRESS = process.env.NEXT_PUBLIC_ESCROW_PYUSD_ADDRESS || ""
 const ORDER_REGISTRY_ADDRESS = process.env.NEXT_PUBLIC_ORDER_REGISTRY_ADDRESS || ""
 const PYUSD_DECIMALS = Number(process.env.NEXT_PUBLIC_PYUSD_DECIMALS || 6)
 
-const AGENT_CHAT_CONFIGS: AgentChatConfig[] = [
-  {
-    key: "inventory",
-    title: "Inventory assistant",
-    description: "Check stock levels and reorder thresholds for SKUs you manage.",
-    example: "stock SKU-123 supplier 0xsupplier…",
-    fields: [
-      {
-        name: "skuId",
-        label: "SKU",
-        placeholder: "SKU-123",
-      },
-      {
-        name: "supplierWallet",
-        label: "Supplier wallet",
-        placeholder: "0xsupplier…",
-        optional: true,
-        lowercase: true,
-        helpText: "Optional override if you want to query a specific supplier.",
-      },
-    ],
-    defaultMessage: "stock",
-    messagePlaceholder: "Ask about inventory for a SKU…",
-    messageHelper: "Leave the message blank to use the SKU details above.",
-    buildMessage: ({ message, fields }) => {
-      const trimmed = message.trim()
-      if (trimmed) return trimmed
-      if (!fields.skuId?.trim()) return ""
-      const supplierPart = fields.supplierWallet?.trim() ? ` supplier ${fields.supplierWallet.trim()}` : ""
-      return `stock ${fields.skuId.trim()}${supplierPart}`
-    },
-  },
-  {
-    key: "po",
-    title: "Purchase order assistant",
-    description: "Review the latest order status before approvals.",
-    example: "status order cmgo3801a0…",
-    fields: [
-      {
-        name: "orderId",
-        label: "Order ID",
-        placeholder: "cmgo3801a0…",
-      },
-    ],
-    messagePlaceholder: "Ask about an order status…",
-    messageHelper: "Leave blank to send 'status order &lt;orderId&gt;'. Order IDs look like cmgo3801a0….",
-    buildMessage: ({ message, fields }) => {
-      const trimmed = message.trim()
-      if (trimmed) return trimmed
-      if (!fields.orderId?.trim()) return ""
-      return `status order ${fields.orderId.trim()}`
-    },
-  },
-  {
-    key: "supplier",
-    title: "Supplier assistant",
-    description: "Confirm orders when you begin fulfillment.",
-    example: "confirm order cmgo3801a0…",
-    fields: [
-      {
-        name: "orderId",
-        label: "Order ID",
-        placeholder: "cmgo3801a0…",
-      },
-    ],
-    defaultMessage: "confirm order",
-    messagePlaceholder: "Confirm an order…",
-    sendLabel: "Confirm order",
-    messageHelper: "Leave blank to send 'confirm order &lt;orderId&gt;'. Order IDs look like cmgo3801a0….",
-    buildMessage: ({ message, fields }) => {
-      const trimmed = message.trim()
-      if (trimmed) return trimmed
-      if (!fields.orderId?.trim()) return ""
-      return `confirm order ${fields.orderId.trim()}`
-    },
-  },
-  {
-    key: "payments",
-    title: "Payments assistant",
-    description: "Release escrow once delivery is complete.",
-    example: "release order cmgo3801a0…",
-    fields: [
-      {
-        name: "orderId",
-        label: "Order ID",
-        placeholder: "cmgo3801a0…",
-      },
-    ],
-    defaultMessage: "release order",
-    messagePlaceholder: "Trigger an escrow release…",
-    messageHelper:
-      "Only the buyer can release escrow. Leave blank to send 'release order &lt;orderId&gt;'. Order IDs look like cmgo3801a0….",
-    sendLabel: "Release escrow",
-    buildMessage: ({ message, fields }) => {
-      const trimmed = message.trim()
-      if (trimmed) return trimmed
-      if (!fields.orderId?.trim()) return ""
-      return `release order ${fields.orderId.trim()}`
-    },
-  },
-]
 function toTokenAmount(amount: number, decimals: number) {
   const fixed = amount.toFixed(decimals)
   const [whole, fraction = ""] = fixed.split(".")
@@ -1281,11 +1179,6 @@ export default function DashboardPage() {
         </table>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        {AGENT_CHAT_CONFIGS.map((config) => (
-          <AgentChat key={config.key} config={config} />
-        ))}
-      </div>
     </section>
   )
 

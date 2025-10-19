@@ -5,8 +5,6 @@ import { prisma } from "@/lib/prisma"
 
 export const runtime = "nodejs"
 
-const AGENT_BRIDGE_URL = process.env.AGENT_BRIDGE_URL || "http://localhost:8200"
-
 export async function GET() {
   const owner = await getUserAddress()
   const products = await prisma.product.findMany({
@@ -75,19 +73,6 @@ export async function POST(request: Request) {
       active: true,
     },
   })
-
-  try {
-    await fetch(`${AGENT_BRIDGE_URL}/inventory/status`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        owner_wallet: owner,
-        sku_id: skuId,
-      }),
-    })
-  } catch (error) {
-    console.error("Failed to refresh inventory atoms via bridge", error)
-  }
 
   return NextResponse.json(product)
 }

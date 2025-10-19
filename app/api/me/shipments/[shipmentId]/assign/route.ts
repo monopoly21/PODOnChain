@@ -3,8 +3,6 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { getUserAddress } from "@/lib/auth"
 
-const AGENT_BRIDGE_URL = process.env.AGENT_BRIDGE_URL || "http://localhost:8200"
-
 export const runtime = "nodejs"
 
 function normalise(address: string) {
@@ -65,18 +63,6 @@ export async function POST(request: Request, { params }: { params: { shipmentId:
     where: { id: shipment.id },
     data: { assignedCourier: nextCourier },
   })
-
-  if (nextCourier) {
-    try {
-      await fetch(`${AGENT_BRIDGE_URL}/shipments/update_courier`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ shipment_id: shipment.id, courier_wallet: nextCourier }),
-      })
-    } catch (error) {
-      console.error("Failed to update shipment courier on-chain", error)
-    }
-  }
 
   return NextResponse.json(updated)
 }

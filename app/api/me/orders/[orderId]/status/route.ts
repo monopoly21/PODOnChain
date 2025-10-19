@@ -5,8 +5,6 @@ import { prisma } from "@/lib/prisma"
 
 export const runtime = "nodejs"
 
-const AGENT_BRIDGE_URL = process.env.AGENT_BRIDGE_URL || "http://localhost:8200"
-
 const BUYER_TRANSITIONS: Record<string, string[]> = {
   Created: ["Approved", "Cancelled"],
   Approved: ["Funded", "Cancelled"],
@@ -37,6 +35,14 @@ function allowedStatuses(current: string, isBuyer: boolean, isSupplier: boolean)
     (SUPPLIER_TRANSITIONS[current] ?? []).forEach((s) => set.add(s))
   }
   return set
+}
+
+const ORDER_STATUS_TIMESTAMPS: Record<string, "approvedAt" | "fundedAt" | "completedAt" | "cancelledAt"> = {
+  Approved: "approvedAt",
+  Funded: "fundedAt",
+  Delivered: "completedAt",
+  Resolved: "completedAt",
+  Cancelled: "cancelledAt",
 }
 
 export async function POST(request: Request, context: { params: Promise<{ orderId: string }> }) {
@@ -118,63 +124,54 @@ export async function POST(request: Request, context: { params: Promise<{ orderI
     metadataChanged = true
   }
 
-  let responseData: any
+  const metadataRaw = metadataChanged ? JSON.stringify(metadata) : order.metadataRaw
+  const updateData: Record<string, unknown> = { status: nextStatus }
+
+  const timestampField = ORDER_STATUS_TIMESTAMPS[nextStatus]
+  if (timestampField) {
+    updateData[timestampField] = new Date()
+  }
+  if (metadataChanged) {
+    updateData.metadataRaw = metadataRaw
+  }
+
+  const updatedOrder = await prisma.order.update({
+    where: { id: order.id },
+    data: updateData,
+  })
 
   if (nextStatus === "Funded") {
-    const escrowTx = typeof body.escrowTxHash === "string" ? body.escrowTxHash : undefined
-    const approvalTx = typeof body.approvalTxHash === "string" ? body.approvalTxHash : undefined
-    const escrowPayload = {
-      order_id: order.id,
-      buyer_wallet: order.buyer,
-      supplier_wallet: order.supplier,
+    const escrowTx = typeof body.escrowTxHash === "string" && body.escrowTxHash.startsWith("0x") ? body.escrowTxHash : null
+    const approvalTx =
+      typeof body.approvalTxHash === "string" && body.approvalTxHash.startsWith("0x") ? body.approvalTxHash : null
+
+    const existingPayment = await prisma.payment.findFirst({
+      where: { orderId: order.id, payer: order.buyer, payee: order.supplier },
+    })
+
+    const paymentData = {
+      orderId: order.id,
+      payer: order.buyer,
+      payee: order.supplier,
       amount: order.totalAmount,
-      escrow_tx: escrowTx,
-      approval_tx: approvalTx,
-      metadata: metadataChanged ? metadata : undefined,
+      currency: order.currency,
+      status: "Escrowed" as const,
+      escrowTx,
+      releaseTx: existingPayment?.releaseTx ?? null,
+      metadataRaw: metadataRaw ?? null,
     }
-    const bridgeResponse = await fetch(`${AGENT_BRIDGE_URL}/payments/escrow`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(escrowPayload),
-    })
-    if (!bridgeResponse.ok) {
-      const detail = await bridgeResponse.json().catch(() => null)
-      return NextResponse.json(
-        { error: "Escrow funding failed", details: detail ?? undefined },
-        { status: bridgeResponse.status },
-      )
+
+    if (existingPayment) {
+      await prisma.payment.update({
+        where: { id: existingPayment.id },
+        data: paymentData,
+      })
+    } else {
+      await prisma.payment.create({ data: paymentData })
     }
-    responseData = await bridgeResponse.json()
-  } else {
-    const bridgePayload = {
-      order_id: order.id,
-      status: nextStatus,
-      metadata: metadataChanged ? metadata : undefined,
-    }
-    const bridgeResponse = await fetch(`${AGENT_BRIDGE_URL}/orders/status`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(bridgePayload),
-    })
-    if (!bridgeResponse.ok) {
-      const detail = await bridgeResponse.json().catch(() => null)
-      return NextResponse.json(
-        { error: "Order status update failed", details: detail ?? undefined },
-        { status: bridgeResponse.status },
-      )
-    }
-    responseData = await bridgeResponse.json()
   }
 
-  const updatedOrder = responseData?.order
-  if (!updatedOrder) {
-    return NextResponse.json(
-      { error: "Bridge response missing order data", details: responseData ?? undefined },
-      { status: 502 },
-    )
-  }
-
-  return NextResponse.json(updatedOrder)
+  return NextResponse.json(serializeOrder(updatedOrder))
 }
 
 function safeParse(value: string | null | undefined) {
@@ -183,5 +180,19 @@ function safeParse(value: string | null | undefined) {
     return JSON.parse(value)
   } catch (error) {
     return null
+  }
+}
+
+function serializeOrder(order: Awaited<ReturnType<typeof prisma.order.findUnique>>) {
+  if (!order) return null
+  return {
+    id: order.id,
+    buyer: order.buyer,
+    supplier: order.supplier,
+    status: order.status,
+    totalAmount: order.totalAmount,
+    metadata: safeParse(order.metadataRaw),
+    createdAt: order.createdAt.toISOString(),
+    updatedAt: order.updatedAt.toISOString(),
   }
 }
