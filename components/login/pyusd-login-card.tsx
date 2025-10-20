@@ -15,14 +15,14 @@ export function PYUSDLoginCard() {
   const chain = useActiveWalletChain()
 
   return (
-    <Card>
+    <Card className="w-full max-w-md border-[3px] border-border/70">
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
           Connect Wallet
           <Badge variant="outline">PYUSD Testnet</Badge>
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-5 px-6 pb-6">
         <p className="text-muted-foreground leading-relaxed">
           Connect with a thirdweb-supported wallet on Sepolia to simulate PYUSD escrow flows. Once connected we store the
           address locally and redirect you to the dashboard.
@@ -32,13 +32,14 @@ export function PYUSDLoginCard() {
           <ConnectButton client={client} chain={sepolia} wallets={wallets} connectModal={{ size: "compact" }} />
         </div>
 
-        <div className="text-xs text-muted-foreground">
+        <div className="text-center text-xs text-muted-foreground">
           {account ? (
             <span>
               Connected {account.address.slice(0, 6)}…{account.address.slice(-4)} on {chain?.name ?? "unknown chain"}
             </span>
           ) : (
-            <span>Not connected</span>) }
+            <span>Not connected</span>
+          )}
         </div>
       </CardContent>
     </Card>

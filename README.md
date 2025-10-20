@@ -110,3 +110,18 @@ NEXT_PUBLIC_ORDER_REGISTRY_ADDRESS="0x..."
 - Explore optional automation hooks (webhooks, serverless jobs) using the same REST APIs (`/api/me/...`).
 
 The current repo is ready for hackathon demos: CSV ingestion, wallet-scoped data, dashboards, courier flow with geofence checks, and contracts ready to deploy.
+
+## Business model & roadmap
+
+### Live today
+
+- **Control tower subscription** – tiered SaaS pricing based on active wallets, shipment volume, and retention window for proof archives.
+- **Escrow settlement fee** – small per-release fee collected when the Sepolia contracts pay out suppliers and couriers.
+- **Professional services** – onboarding, workflow tuning, and bespoke attestation tooling for enterprise deployments.
+
+### Coming soon
+
+- **Proof & storage add-ons** – optional upgrades for persistent Lighthouse/IPFS storage, DataCoin minting, and enhanced geofence verification tiers (tooling wired up; packaging in progress).
+- **Integration marketplace** – plug-and-play connectors for SAP, NetSuite, WMS/TMS platforms, carrier APIs, and analytics tools, offered as premium modules or via partner revenue share.
+- **Automation hooks** – serverless/webhook triggers so operators can extend PODx with custom scripts, risk checks, or internal alerting.
+- **Extended data services** – governance-friendly retention, compliance exports, and audit bundles for regulated supply chains.

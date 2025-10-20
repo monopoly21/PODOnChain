@@ -31,10 +31,8 @@ export default function LoginPage() {
   }, [account, router])
 
   return (
-    <main className="min-h-dvh bg-background text-foreground">
-      <section className="mx-auto max-w-lg px-4 py-16">
-        <PYUSDLoginCard />
-      </section>
+    <main className="min-h-dvh bg-background text-foreground flex items-center justify-center px-4 py-12">
+      <PYUSDLoginCard />
     </main>
   )
 }

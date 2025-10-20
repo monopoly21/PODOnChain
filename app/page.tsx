@@ -107,6 +107,56 @@ export default function LandingPage() {
             items={["Geo-fenced verifications", "QR-linked attestation payloads", "Instant drop settlements"]}
           />
         </div>
+
+        <div className="neo-surface grid gap-6 rounded-[32px] bg-card/90 p-6 md:p-8">
+          <header className="flex flex-col gap-2 text-left md:flex-row md:items-end md:justify-between">
+            <div>
+              <p className="neo-badge inline-flex items-center gap-2 text-xs">Business model</p>
+              <h2 className="mt-3 text-2xl font-bold uppercase tracking-tight">How PODx sustains the control tower</h2>
+            </div>
+            <p className="max-w-md text-sm text-muted-foreground">
+              Clear monetisation today, with a roadmap for deeper integrations and automation that compound the value of every wallet on the network.
+            </p>
+          </header>
+
+          <div className="grid gap-6 md:grid-cols-2">
+            <div className="rounded-[28px] border-[3px] border-border/60 bg-secondary/60 p-6 text-sm text-secondary-foreground [box-shadow:var(--shadow-soft)]">
+              <h3 className="mb-3 text-base font-semibold uppercase tracking-wide text-secondary-foreground">
+                Live revenue streams
+              </h3>
+              <ul className="space-y-3">
+                <li>
+                  <span className="font-semibold text-primary">Control tower plans:</span> tiered SaaS pricing by wallets, shipment volume, and proof retention.
+                </li>
+                <li>
+                  <span className="font-semibold text-primary">Escrow settlement fee:</span> basis-point charge when Sepolia contracts release supplier and courier payouts.
+                </li>
+                <li>
+                  <span className="font-semibold text-primary">Expert services:</span> onboarding and bespoke workflow tuning for enterprise deployments.
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-[28px] border-[3px] border-border/60 bg-card p-6 text-sm text-muted-foreground [box-shadow:var(--shadow-soft)]">
+              <h3 className="mb-3 text-base font-semibold uppercase tracking-wide text-foreground">
+                Coming next
+              </h3>
+              <ul className="space-y-3">
+                <li>
+                  <span className="font-semibold text-primary">Integration marketplace:</span> plug-ins for SAP, NetSuite, WMS/TMS, carrier APIs, and analytics platforms.
+                </li>
+                <li>
+                  <span className="font-semibold text-primary">Proof & storage add-ons:</span> Lighthouse/IPFS retention, DataCoin minting, and premium geofence checks (tooling ready; monetisation coming).
+                </li>
+                <li>
+                  <span className="font-semibold text-primary">Automation hooks:</span> webhooks and serverless triggers for custom risk checks or internal alerts.
+                </li>
+                <li>
+                  <span className="font-semibold text-primary">Extended data services:</span> compliance exports, audit bundles, and retention policies for regulated lanes.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
       </section>
     </main>
   )
