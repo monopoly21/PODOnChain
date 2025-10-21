@@ -22,15 +22,15 @@ import type {
 } from "../../common";
 
 export interface IOrderRegistryInterface extends Interface {
-  getFunction(nameOrSignature: "releaseEscrowFromShipment"): FunctionFragment;
+  getFunction(nameOrSignature: "releaseEscrowWithReward"): FunctionFragment;
 
   encodeFunctionData(
-    functionFragment: "releaseEscrowFromShipment",
-    values: [BigNumberish, AddressLike, BigNumberish]
+    functionFragment: "releaseEscrowWithReward",
+    values: [BigNumberish, AddressLike, BigNumberish, BytesLike, string, string]
   ): string;
 
   decodeFunctionResult(
-    functionFragment: "releaseEscrowFromShipment",
+    functionFragment: "releaseEscrowWithReward",
     data: BytesLike
   ): Result;
 }
@@ -78,8 +78,15 @@ export interface IOrderRegistry extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
-  releaseEscrowFromShipment: TypedContractMethod<
-    [orderId: BigNumberish, courier: AddressLike, courierReward: BigNumberish],
+  releaseEscrowWithReward: TypedContractMethod<
+    [
+      orderId: BigNumberish,
+      courier: AddressLike,
+      courierReward: BigNumberish,
+      shipmentId: BytesLike,
+      lineItems: string,
+      metadataUri: string
+    ],
     [void],
     "nonpayable"
   >;
@@ -89,9 +96,16 @@ export interface IOrderRegistry extends BaseContract {
   ): T;
 
   getFunction(
-    nameOrSignature: "releaseEscrowFromShipment"
+    nameOrSignature: "releaseEscrowWithReward"
   ): TypedContractMethod<
-    [orderId: BigNumberish, courier: AddressLike, courierReward: BigNumberish],
+    [
+      orderId: BigNumberish,
+      courier: AddressLike,
+      courierReward: BigNumberish,
+      shipmentId: BytesLike,
+      lineItems: string,
+      metadataUri: string
+    ],
     [void],
     "nonpayable"
   >;

@@ -80,6 +80,8 @@ SHIPMENT_REGISTRY_ABI = [
       },
       {"internalType": "bytes", "name": "courierSignature", "type": "bytes"},
       {"internalType": "bytes", "name": "buyerSignature", "type": "bytes"},
+      {"internalType": "string", "name": "lineItems", "type": "string"},
+      {"internalType": "string", "name": "metadataUri", "type": "string"},
     ],
     "name": "confirmDrop",
     "outputs": [],
@@ -158,12 +160,16 @@ class ShipmentContractProcessor:
     distance_m: int,
     courier_sig: bytes,
     buyer_sig: bytes,
+    line_items: str,
+    metadata_uri: str,
   ) -> str:
     nonce = self.web3.eth.get_transaction_count(self.account.address)
     tx = self.contract.functions.confirmDrop(
       (shipment_hash, order_id, location_hash, claimed_ts, distance_m),
       courier_sig,
       buyer_sig,
+      line_items,
+      metadata_uri,
     ).build_transaction(
       {
         "from": self.account.address,
@@ -488,6 +494,16 @@ async def process_milestone(update: ShipmentMilestoneUpdate, *, radius_m: Option
         except json.JSONDecodeError:
           metadata = {}
       items = metadata.get("items")
+      line_items_json = "[]"
+      if isinstance(items, list):
+        try:
+          line_items_json = json.dumps(items)
+        except (TypeError, ValueError):
+          line_items_json = "[]"
+      metadata_uri_value = ""
+      drop_metadata_uri = metadata.get("dropMetadataUri") if isinstance(metadata, dict) else None
+      if isinstance(drop_metadata_uri, str):
+        metadata_uri_value = drop_metadata_uri
       if isinstance(items, list):
         for entry in items:
           if not isinstance(entry, dict):
@@ -549,6 +565,8 @@ async def process_milestone(update: ShipmentMilestoneUpdate, *, radius_m: Option
           distance_m=int(round(distance)),
           courier_sig=courier_sig_bytes,
           buyer_sig=buyer_sig_bytes,
+          line_items=line_items_json,
+          metadata_uri=metadata_uri_value,
         )
         escrow_tx = tx_hash
       except Exception:

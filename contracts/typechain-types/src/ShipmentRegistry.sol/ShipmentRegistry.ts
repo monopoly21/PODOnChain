@@ -143,7 +143,13 @@ export interface ShipmentRegistryInterface extends Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "confirmDrop",
-    values: [ShipmentRegistry.DropApprovalStruct, BytesLike, BytesLike]
+    values: [
+      ShipmentRegistry.DropApprovalStruct,
+      BytesLike,
+      BytesLike,
+      string,
+      string
+    ]
   ): string;
   encodeFunctionData(
     functionFragment: "confirmPickup",
@@ -395,7 +401,9 @@ export interface ShipmentRegistry extends BaseContract {
     [
       approval: ShipmentRegistry.DropApprovalStruct,
       courierSignature: BytesLike,
-      buyerSignature: BytesLike
+      buyerSignature: BytesLike,
+      lineItems: string,
+      metadataUri: string
     ],
     [void],
     "nonpayable"
@@ -479,7 +487,9 @@ export interface ShipmentRegistry extends BaseContract {
     [
       approval: ShipmentRegistry.DropApprovalStruct,
       courierSignature: BytesLike,
-      buyerSignature: BytesLike
+      buyerSignature: BytesLike,
+      lineItems: string,
+      metadataUri: string
     ],
     [void],
     "nonpayable"

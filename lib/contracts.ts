@@ -36,7 +36,7 @@ export const shipmentRegistryAbi = [
   "function registerShipment(bytes32 shipmentId, uint256 orderId, address buyer, address supplier, address courier) external",
   "function updateCourier(bytes32 shipmentId, address courier) external",
   "function confirmPickup((bytes32,uint256,bytes32,uint64) approval, bytes courierSignature, bytes supplierSignature) external",
-  "function confirmDrop((bytes32,uint256,bytes32,uint64,uint256) approval, bytes courierSignature, bytes buyerSignature) external",
+  "function confirmDrop((bytes32,uint256,bytes32,uint64,uint256) approval, bytes courierSignature, bytes buyerSignature, string lineItems, string metadataUri) external",
   "function markEvent(uint256 orderId, uint8 milestone, string geohash, bytes32 proofHash) external",
   "event PickupApproved(bytes32 indexed shipmentId, uint256 indexed orderId, bytes32 locationHash, uint64 claimedTimestamp)",
   "event DropApproved(bytes32 indexed shipmentId, uint256 indexed orderId, bytes32 locationHash, uint64 claimedTimestamp, uint256 distanceMeters, uint256 courierReward)",
@@ -76,4 +76,8 @@ export function getDeliveryOracleSigner() {
 
 export function getOrderRegistryWithSigner() {
   return getOrderRegistryContract().connect(getDeliveryOracleSigner())
+}
+
+export function getShipmentRegistryWithSigner() {
+  return getShipmentRegistryContract().connect(getDeliveryOracleSigner())
 }

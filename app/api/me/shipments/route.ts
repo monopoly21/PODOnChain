@@ -1,7 +1,10 @@
+import { randomUUID } from "crypto"
 import { NextResponse } from "next/server"
 import { getUserAddress } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { geodesicDistance } from "@/lib/geo"
+import { getShipmentRegistryWithSigner } from "@/lib/contracts"
+import { deriveShipmentRegistryId, parseChainOrderId } from "@/lib/shipment-registry"
 
 export const runtime = "nodejs"
 
@@ -163,7 +166,22 @@ export async function POST(request: Request) {
     )
   }
   const dueDate = body.dueBy ? new Date(body.dueBy) : new Date(Date.now() + 72 * 3600 * 1000)
-  const chainOrderId = metadata?.chainOrderId
+
+  const chainOrderIdRaw =
+    typeof body.chainOrderId === "string" && body.chainOrderId.trim()
+      ? body.chainOrderId.trim()
+      : metadata?.chainOrderId ?? metadata?.chain_orderId ?? metadata?.chain_order_id ?? null
+
+  let chainOrderNumeric: bigint
+  try {
+    chainOrderNumeric = parseChainOrderId(chainOrderIdRaw)
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Missing on-chain order id" },
+      { status: 400 },
+    )
+  }
+  const chainOrderIdString = chainOrderNumeric.toString()
 
   const plannedDistance = Math.round(geodesicDistance(pickupLatValue, pickupLonValue, dropLatValue, dropLonValue))
   const rewardEstimate = Number((BigInt(plannedDistance) * REWARD_PER_METER) / 1_000_000n)
@@ -172,27 +190,80 @@ export async function POST(request: Request) {
     typeof body.metadata === "string"
       ? safeParse(body.metadata)
       : body.metadata && typeof body.metadata === "object"
-        ? body.metadata
-        : undefined
+      ? body.metadata
+      : undefined
+
+  const assignedCourier = normaliseAddress(body.assignedCourier ?? null) ?? null
+  const registerCourier = assignedCourier ?? supplier
+
+  const shipmentId =
+    typeof body.id === "string" && body.id.trim().length > 0 ? body.id.trim() : randomUUID()
+  const registryShipmentId = deriveShipmentRegistryId(shipmentId)
+
+  const registry = getShipmentRegistryWithSigner()
+  let registerTxHash = ""
+  try {
+    const tx = await registry.registerShipment(
+      registryShipmentId,
+      chainOrderNumeric,
+      order.buyer,
+      supplier,
+      registerCourier,
+    )
+    const receipt = await tx.wait()
+    registerTxHash = receipt?.hash ?? tx.hash
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to register shipment on-chain"
+    return NextResponse.json(
+      { error: `Shipment registry transaction failed: ${message}` },
+      { status: 502 },
+    )
+  }
+
+  const baseShipmentMetadata = { ...(shipmentMetadataBase ?? {}) }
+  const existingOnchainMeta =
+    typeof baseShipmentMetadata.onchain === "object" && baseShipmentMetadata.onchain !== null
+      ? (baseShipmentMetadata.onchain as Record<string, unknown>)
+      : {}
 
   const shipmentMetadata = {
-    ...(shipmentMetadataBase ?? {}),
-    ...(chainOrderId !== undefined ? { chainOrderId } : {}),
+    ...baseShipmentMetadata,
+    chainOrderId: chainOrderIdString,
+    shipmentRegistryId: registryShipmentId,
     courierRewardEstimate: rewardEstimate,
     courierRewardCurrency: "PYUSD",
+    onchain: {
+      ...existingOnchainMeta,
+      chainOrderId: chainOrderIdString,
+      shipmentRegistryId: registryShipmentId,
+      registerTxHash,
+      registerCourier,
+    },
   }
+
+  const orderShipmentRegistryMeta =
+    typeof metadata?.shipmentRegistry === "object" && metadata.shipmentRegistry !== null
+      ? (metadata.shipmentRegistry as Record<string, unknown>)
+      : {}
 
   const orderMetadataUpdate: Record<string, any> = {
     ...metadata,
     pickup: { lat: pickupLatValue, lon: pickupLonValue },
     drop: { lat: dropLatValue, lon: dropLonValue },
     courierRewardEstimate: rewardEstimate,
+    chainOrderId: chainOrderIdString,
+    shipmentRegistry: {
+      ...orderShipmentRegistryMeta,
+      [shipmentId]: {
+        shipmentRegistryId: registryShipmentId,
+        registerTxHash,
+      },
+    },
   }
-
-  const assignedCourier = normaliseAddress(body.assignedCourier ?? null) ?? null
 
   const shipment = await prisma.shipment.create({
     data: {
+      id: shipmentId,
       orderId: order.id,
       shipmentNo,
       supplier,
@@ -204,14 +275,7 @@ export async function POST(request: Request) {
       dueBy: dueDate,
       assignedCourier,
       status: "Created",
-      metadataRaw: shipmentMetadata ? JSON.stringify(shipmentMetadata) : null,
-    },
-  })
-
-  await prisma.order.update({
-    where: { id: order.id },
-    data: {
-      metadataRaw: JSON.stringify(orderMetadataUpdate),
+      metadataRaw: JSON.stringify(shipmentMetadata),
     },
   })
 

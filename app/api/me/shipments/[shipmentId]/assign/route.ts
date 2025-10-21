@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server"
 
-import { prisma } from "@/lib/prisma"
 import { getUserAddress } from "@/lib/auth"
+import { prisma } from "@/lib/prisma"
+import { getShipmentRegistryWithSigner } from "@/lib/contracts"
+import { deriveShipmentRegistryId } from "@/lib/shipment-registry"
 
 export const runtime = "nodejs"
 
@@ -59,10 +61,58 @@ export async function POST(request: Request, { params }: { params: { shipmentId:
     nextCourier = wallet
   }
 
+  const normalizedNextCourier = nextCourier?.toLowerCase() ?? null
+  if (!normalizedNextCourier) {
+    return NextResponse.json({ error: "courier required" }, { status: 400 })
+  }
+
+  const currentCourier = shipment.assignedCourier?.toLowerCase() ?? null
+  if (currentCourier === normalizedNextCourier) {
+    return NextResponse.json(shipment)
+  }
+
+  const registry = getShipmentRegistryWithSigner()
+  const registryShipmentId = deriveShipmentRegistryId(shipment.id)
+  let updateTxHash = ""
+  try {
+    const tx = await registry.updateCourier(registryShipmentId, normalizedNextCourier)
+    const receipt = await tx.wait()
+    updateTxHash = receipt?.hash ?? tx.hash
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to update courier on-chain"
+    return NextResponse.json({ error: `Courier update failed: ${message}` }, { status: 502 })
+  }
+
+  const existingMetadata = safeParse(shipment.metadataRaw)
+  const existingOnchain =
+    existingMetadata && typeof existingMetadata.onchain === "object" && existingMetadata.onchain !== null
+      ? (existingMetadata.onchain as Record<string, unknown>)
+      : {}
+  const nextMetadata = {
+    ...(existingMetadata ?? {}),
+    onchain: {
+      ...existingOnchain,
+      registerCourier: normalizedNextCourier,
+      lastCourierUpdateTxHash: updateTxHash,
+    },
+  }
+
   const updated = await prisma.shipment.update({
     where: { id: shipment.id },
-    data: { assignedCourier: nextCourier },
+    data: {
+      assignedCourier: normalizedNextCourier,
+      metadataRaw: JSON.stringify(nextMetadata),
+    },
   })
 
   return NextResponse.json(updated)
+}
+
+function safeParse(value: string | null | undefined) {
+  if (!value) return null
+  try {
+    return JSON.parse(value)
+  } catch (error) {
+    return null
+  }
 }

@@ -6,7 +6,14 @@ import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 
 interface IOrderRegistry {
-  function releaseEscrowFromShipment(uint256 orderId, address courier, uint256 courierReward) external;
+  function releaseEscrowWithReward(
+    uint256 orderId,
+    address courier,
+    uint256 courierReward,
+    bytes32 shipmentId,
+    string calldata lineItems,
+    string calldata metadataUri
+  ) external;
 }
 
 contract ShipmentRegistry is EIP712 {
@@ -171,7 +178,9 @@ contract ShipmentRegistry is EIP712 {
   function confirmDrop(
     DropApproval calldata approval,
     bytes calldata courierSignature,
-    bytes calldata buyerSignature
+    bytes calldata buyerSignature,
+    string calldata lineItems,
+    string calldata metadataUri
   ) external {
     Shipment storage shipment = _requireShipment(approval.shipmentId);
     if (shipment.orderId != approval.orderId) revert OrderMismatch();
@@ -199,7 +208,14 @@ contract ShipmentRegistry is EIP712 {
       reward
     );
 
-    IOrderRegistry(orderRegistry).releaseEscrowFromShipment(approval.orderId, shipment.courier, reward);
+    IOrderRegistry(orderRegistry).releaseEscrowWithReward(
+      approval.orderId,
+      shipment.courier,
+      reward,
+      approval.shipmentId,
+      lineItems,
+      metadataUri
+    );
   }
 
   function markEvent(uint256 orderId, uint8 milestone, string calldata geohash, bytes32 proofHash) external {

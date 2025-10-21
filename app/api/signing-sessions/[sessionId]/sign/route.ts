@@ -1,19 +1,15 @@
 import { NextResponse } from "next/server"
 
 import type { Prisma } from "@prisma/client"
-import { getAddress } from "viem"
+import type { Interface } from "ethers"
 
 import { prisma } from "@/lib/prisma"
 import { buildPickupTypedData, buildDropTypedData } from "@/lib/shipment-attestation"
 import { hashToken, verifyMagicLinkToken } from "@/lib/signing-session"
 import { verifyTypedSignature } from "@/lib/verify-signature"
 import { geodesicDistance } from "@/lib/geo"
-import {
-  getDeliveryOracleSigner,
-  getEscrowContract,
-  getOrderRegistryContract,
-  getOrderRegistryWithSigner,
-} from "@/lib/contracts"
+import { getShipmentRegistryWithSigner } from "@/lib/contracts"
+import { deriveShipmentRegistryId, parseChainOrderId } from "@/lib/shipment-registry"
 
 const PICKUP_SIGNING_VERIFIER =
   process.env.PICKUP_SIGNING_VERIFIER ?? "0x0000000000000000000000000000000000000000"
@@ -177,17 +173,19 @@ export async function POST(
     )
   }
 
-  let escrowTx: string | null = null
+  let dropTx: string | null = null
 
   if (session.kind === "drop") {
-    escrowTx = await finalizeDropMilestone({
+    dropTx = await finalizeDropMilestone({
       session,
       payloadData,
+      buyerSignature: body.signature,
     })
   } else {
     await finalizePickupMilestone({
       session,
       payloadData,
+      supplierSignature: body.signature,
     })
   }
 
@@ -209,19 +207,25 @@ export async function POST(
 
   return NextResponse.json({
     ok: true,
-    escrowTx,
+    dropTx,
+    escrowTx: dropTx,
   })
 }
 
 async function finalizePickupMilestone({
   session,
   payloadData,
+  supplierSignature,
 }: {
   session: Awaited<ReturnType<typeof prisma.signingSession.findFirst>>
   payloadData: Record<string, any>
+  supplierSignature: string
 }) {
   if (!session) {
     throw new Error("Signing session not found")
+  }
+  if (typeof supplierSignature !== "string" || !supplierSignature.trim()) {
+    throw new Error("Supplier signature missing")
   }
   const shipment = await prisma.shipment.findUnique({ where: { id: session.shipmentId } })
   if (!shipment) {
@@ -232,6 +236,43 @@ async function finalizePickupMilestone({
     throw new Error("Order not found")
   }
   const claimedTimestamp = Number(payloadData.claimedTs ?? Math.floor(Date.now() / 1000))
+  if (!Number.isFinite(claimedTimestamp) || claimedTimestamp <= 0) {
+    throw new Error("Invalid pickup timestamp")
+  }
+  if (typeof payloadData.locationHash !== "string") {
+    throw new Error("Session payload missing location hash")
+  }
+  if (typeof payloadData.shipmentHash !== "string") {
+    throw new Error("Session payload missing shipment hash")
+  }
+
+  const expectedRegistryId = deriveShipmentRegistryId(session.shipmentId)
+  if (payloadData.shipmentHash.toLowerCase() !== expectedRegistryId.toLowerCase()) {
+    throw new Error("Shipment hash mismatch for pickup confirmation")
+  }
+
+  const chainOrderNumeric = parseChainOrderId(payloadData.chainOrderId)
+
+  const courierSignature = session.courierSignature
+  if (typeof courierSignature !== "string" || !courierSignature.trim()) {
+    throw new Error("Courier signature missing")
+  }
+
+  const registry = getShipmentRegistryWithSigner()
+  let pickupTxHash = ""
+  try {
+    const tx = await registry.confirmPickup(
+      [payloadData.shipmentHash, chainOrderNumeric, payloadData.locationHash, BigInt(claimedTimestamp)],
+      courierSignature,
+      supplierSignature,
+    )
+    const receipt = await tx.wait()
+    pickupTxHash = receipt?.hash ?? tx.hash
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to confirm pickup on-chain"
+    throw new Error(`Pickup confirmation failed: ${message}`)
+  }
+
   const now = new Date()
 
   await prisma.$transaction(async (tx) => {
@@ -257,16 +298,50 @@ async function finalizePickupMilestone({
       shipmentUpdate.assignedCourier = session.courier
     }
 
+    const existingShipmentMetadata = safeParse(shipment.metadataRaw)
+    const existingShipmentOnchain =
+      existingShipmentMetadata &&
+      typeof existingShipmentMetadata.onchain === "object" &&
+      existingShipmentMetadata.onchain !== null
+        ? (existingShipmentMetadata.onchain as Record<string, unknown>)
+        : {}
+    const nextShipmentMetadata = {
+      ...(existingShipmentMetadata ?? {}),
+      pickupTxHash,
+      onchain: {
+        ...existingShipmentOnchain,
+        pickupTxHash,
+        pickupConfirmedTs: claimedTimestamp,
+      },
+    }
+    shipmentUpdate.metadataRaw = JSON.stringify(nextShipmentMetadata)
+
     await tx.shipment.update({
       where: { id: shipment.id },
       data: shipmentUpdate,
     })
+
+    const orderMetadata = safeParse(order.metadataRaw)
+    const existingOrderMetadata = orderMetadata
+    const existingOrderOnchain =
+      existingOrderMetadata && typeof existingOrderMetadata.onchain === "object" && existingOrderMetadata.onchain !== null
+        ? (existingOrderMetadata.onchain as Record<string, unknown>)
+        : {}
+    const nextOrderMetadata = {
+      ...(existingOrderMetadata ?? {}),
+      pickupTxHash,
+      onchain: {
+        ...existingOrderOnchain,
+        pickupTxHash,
+      },
+    }
 
     await tx.order.update({
       where: { id: order.id },
       data: {
         status: "Shipped",
         updatedAt: now,
+        metadataRaw: JSON.stringify(nextOrderMetadata),
       },
     })
   })
@@ -275,12 +350,17 @@ async function finalizePickupMilestone({
 async function finalizeDropMilestone({
   session,
   payloadData,
+  buyerSignature,
 }: {
   session: Awaited<ReturnType<typeof prisma.signingSession.findFirst>>
   payloadData: Record<string, any>
+  buyerSignature: string
 }): Promise<string | null> {
   if (!session) {
     throw new Error("Signing session not found")
+  }
+  if (typeof buyerSignature !== "string" || !buyerSignature.trim()) {
+    throw new Error("Buyer signature missing")
   }
   const shipment = await prisma.shipment.findUnique({ where: { id: session.shipmentId } })
   if (!shipment) {
@@ -292,6 +372,9 @@ async function finalizeDropMilestone({
   }
 
   const claimedTimestamp = Number(payloadData.claimedTs ?? Math.floor(Date.now() / 1000))
+  if (!Number.isFinite(claimedTimestamp) || claimedTimestamp <= 0) {
+    throw new Error("Invalid drop timestamp")
+  }
   const now = new Date()
 
   if (
@@ -303,105 +386,51 @@ async function finalizeDropMilestone({
     throw new Error("Shipment missing coordinates")
   }
 
-  if (typeof payloadData.shipmentHash !== "string") {
+  if (typeof payloadData.shipmentHash !== "string" || typeof payloadData.locationHash !== "string") {
     throw new Error("Session payload missing shipment hash")
+  }
+
+  const expectedRegistryId = deriveShipmentRegistryId(session.shipmentId)
+  if (payloadData.shipmentHash.toLowerCase() !== expectedRegistryId.toLowerCase()) {
+    throw new Error("Shipment hash mismatch for drop confirmation")
+  }
+
+  const chainOrderNumeric = parseChainOrderId(payloadData.chainOrderId)
+  const courierSignature = session.courierSignature
+  if (typeof courierSignature !== "string" || !courierSignature.trim()) {
+    throw new Error("Courier signature missing")
   }
 
   const plannedDistance = Math.round(
     geodesicDistance(shipment.pickupLat, shipment.pickupLon, shipment.dropLat, shipment.dropLon),
   )
+  const distanceMeters = Math.max(0, Math.round(Number(payloadData.distanceMeters ?? plannedDistance)))
 
-  const chainOrderIdRaw = payloadData.chainOrderId
-  if (typeof chainOrderIdRaw !== "string" || !chainOrderIdRaw.trim()) {
-    throw new Error("Missing on-chain order identifier")
-  }
-
-  let chainOrderNumeric: bigint
-  try {
-    chainOrderNumeric = chainOrderIdRaw.startsWith("0x")
-      ? BigInt(chainOrderIdRaw)
-      : BigInt(chainOrderIdRaw)
-  } catch (error) {
-    throw new Error("Invalid on-chain order id")
-  }
-
-  const courierAddressRaw = shipment.assignedCourier ?? session.courier
-  let courierAddress: string
-  try {
-    courierAddress = getAddress(courierAddressRaw)
-  } catch (error) {
-    throw new Error("Courier address invalid")
-  }
-
-  const metadata = safeParse(order.metadataRaw)
-  const lineItems = Array.isArray(metadata?.items) ? metadata.items : []
+  const registry = getShipmentRegistryWithSigner()
+  let dropTxHash = ""
+  let courierRewardWei = 0n
+  const orderMetadata = safeParse(order.metadataRaw)
+  const lineItems = Array.isArray(orderMetadata?.items) ? orderMetadata.items : []
   const lineItemsJson = JSON.stringify(lineItems)
   const metadataUri = typeof payloadData.metadataUri === "string" ? payloadData.metadataUri : ""
-
-  const registryContract = getOrderRegistryContract()
-  const escrowContract = getEscrowContract()
-  const oracleSigner = getDeliveryOracleSigner()
-
-  let registeredOracle: string
   try {
-    registeredOracle = await registryContract.deliveryOracle()
-  } catch (error) {
-    throw new Error("Unable to resolve delivery oracle address on-chain")
-  }
-
-  if (!registeredOracle || registeredOracle === "0x0000000000000000000000000000000000000000") {
-    throw new Error("Order registry oracle address is unset on-chain")
-  }
-
-  if (registeredOracle.toLowerCase() !== oracleSigner.address.toLowerCase()) {
-    throw new Error(
-      `Delivery oracle mismatch: contract expects ${registeredOracle}, env provides ${oracleSigner.address}`,
-    )
-  }
-
-  let supplierAmount = 0n
-  let escrowBalance = 0n
-  try {
-    const onchainOrder = await registryContract.orders(chainOrderNumeric)
-    const onchainAmount =
-      typeof onchainOrder?.amount !== "undefined"
-        ? onchainOrder.amount
-        : Array.isArray(onchainOrder) && typeof onchainOrder[2] !== "undefined"
-          ? onchainOrder[2]
-          : 0n
-    supplierAmount = BigInt(onchainAmount)
-    const escrowedValue = await escrowContract.escrowed(chainOrderNumeric)
-    escrowBalance = typeof escrowedValue === "bigint" ? escrowedValue : BigInt(escrowedValue ?? 0)
-  } catch (error) {
-    throw new Error("Failed to read on-chain order state")
-  }
-
-  if (escrowBalance < supplierAmount) {
-    throw new Error("Escrow underfunded for supplier payout")
-  }
-
-  const maxReward = escrowBalance > supplierAmount ? escrowBalance - supplierAmount : 0n
-  let rewardAmount = BigInt(plannedDistance) * REWARD_PER_METER
-  if (rewardAmount > maxReward) {
-    rewardAmount = maxReward
-  }
-
-  const registry = getOrderRegistryWithSigner()
-  let escrowTxHash: string | null = null
-  try {
-    const tx = await registry.releaseEscrowWithReward(
-      chainOrderNumeric,
-      courierAddress,
-      rewardAmount,
-      payloadData.shipmentHash,
+    const tx = await registry.confirmDrop(
+      [payloadData.shipmentHash, chainOrderNumeric, payloadData.locationHash, BigInt(claimedTimestamp), BigInt(distanceMeters)],
+      courierSignature,
+      buyerSignature,
       lineItemsJson,
       metadataUri,
     )
     const receipt = await tx.wait()
-    escrowTxHash = receipt?.hash ?? tx.hash
+    dropTxHash = receipt?.hash ?? tx.hash
+    courierRewardWei = extractCourierRewardFromLogs(receipt?.logs ?? [], registry.target?.toString() ?? "", registry.interface)
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to release escrow"
-    throw new Error(`Escrow release failed: ${message}`)
+    const message = error instanceof Error ? error.message : "Failed to confirm drop on-chain"
+    throw new Error(`Drop confirmation failed: ${message}`)
+  }
+
+  if (courierRewardWei === 0n) {
+    courierRewardWei = BigInt(distanceMeters) * REWARD_PER_METER
   }
 
   await prisma.$transaction(async (tx) => {
@@ -413,18 +442,33 @@ async function finalizeDropMilestone({
         claimedTs: claimedTimestamp,
         photoHash: null,
         photoCid: null,
-        litDistance: payloadData.distanceMeters ?? null,
+        litDistance: distanceMeters,
         litOk: true,
       },
     })
 
+    const existingShipmentMetadata = safeParse(shipment.metadataRaw)
+    const existingOnchain =
+      existingShipmentMetadata &&
+      typeof existingShipmentMetadata.onchain === "object" &&
+      existingShipmentMetadata.onchain !== null
+        ? (existingShipmentMetadata.onchain as Record<string, unknown>)
+        : {}
+
     const shipmentMeta = {
-      ...(safeParse(shipment.metadataRaw) ?? {}),
+      ...(existingShipmentMetadata ?? {}),
       dropPendingSignature: false,
-      courierRewardPaid: Number(rewardAmount) / 1_000_000,
-      courierRewardTx: escrowTxHash,
+      courierRewardPaid: Number(courierRewardWei) / 1_000_000,
+      courierRewardWei: courierRewardWei.toString(),
+      dropTxHash,
       dropMetadataUri: metadataUri || undefined,
       dropPlannedDistance: plannedDistance,
+      onchain: {
+        ...existingOnchain,
+        dropTxHash,
+        courierRewardWei: courierRewardWei.toString(),
+        dropConfirmedTs: claimedTimestamp,
+      },
     }
 
     await tx.shipment.update({
@@ -437,6 +481,12 @@ async function finalizeDropMilestone({
       },
     })
 
+    const existingOrderMetadata = orderMetadata
+    const existingOrderOnchain =
+      existingOrderMetadata && typeof existingOrderMetadata.onchain === "object" && existingOrderMetadata.onchain !== null
+        ? (existingOrderMetadata.onchain as Record<string, unknown>)
+        : {}
+
     await tx.order.update({
       where: { id: order.id },
       data: {
@@ -444,9 +494,17 @@ async function finalizeDropMilestone({
         completedAt: now,
         updatedAt: now,
         metadataRaw: JSON.stringify({
-          ...(metadata ?? {}),
-          escrowReleaseTx: escrowTxHash,
+          ...(existingOrderMetadata ?? {}),
+          escrowReleaseTx: dropTxHash,
+          courierRewardWei: courierRewardWei.toString(),
+          courierRewardPaid: Number(courierRewardWei) / 1_000_000,
           dropPendingBuyerSignature: false,
+          onchain: {
+            ...existingOrderOnchain,
+            dropTxHash,
+            courierRewardWei: courierRewardWei.toString(),
+            dropConfirmedTs: claimedTimestamp,
+          },
         }),
       },
     })
@@ -461,14 +519,55 @@ async function finalizeDropMilestone({
         where: { id: existingPayment.id },
         data: {
           status: "Released",
-          releaseTx: escrowTxHash,
+          releaseTx: dropTxHash,
           updatedAt: now,
         },
       })
     }
   })
 
-  return escrowTxHash
+  return dropTxHash
+}
+
+function extractCourierRewardFromLogs(
+  logs: Array<{ address?: string; topics: readonly string[]; data: string }>,
+  registryAddress: string,
+  iface: Interface,
+): bigint {
+  if (!registryAddress) {
+    return 0n
+  }
+  const normalized = registryAddress.toLowerCase()
+  for (const log of logs) {
+    if (!log || typeof log !== "object") continue
+    const logAddress = typeof log.address === "string" ? log.address.toLowerCase() : ""
+    if (logAddress !== normalized) continue
+    try {
+      const parsed = iface.parseLog(log)
+      if (parsed && parsed.name === "DropApproved") {
+        const reward = parsed.args?.courierReward
+        if (typeof reward === "bigint") {
+          return reward
+        }
+        if (typeof reward === "number") {
+          return BigInt(Math.floor(reward))
+        }
+        if (reward && typeof reward === "object" && "toString" in reward) {
+          const stringValue = (reward as { toString(): string }).toString()
+          if (stringValue) {
+            try {
+              return BigInt(stringValue)
+            } catch {
+              // ignore parse error, fall back to 0
+            }
+          }
+        }
+      }
+    } catch {
+      // ignore logs that fail to parse
+    }
+  }
+  return 0n
 }
 
 async function incrementBuyerInventory(

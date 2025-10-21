@@ -35,6 +35,7 @@ export async function POST(request: Request) {
     distanceMeters?: number
     dropLat?: number | null
     dropLon?: number | null
+    metadataUri?: string | null
   }
 
   if (!body || typeof body.shipmentId !== "string") {
@@ -235,6 +236,7 @@ export async function POST(request: Request) {
     notes: body.notes ?? null,
     courierSignature: body.courierSignature,
     distanceMeters: sessionDistanceMeters,
+    metadataUri: typeof body.metadataUri === "string" ? body.metadataUri : null,
   }
 
   const session = await prisma.signingSession.create({
