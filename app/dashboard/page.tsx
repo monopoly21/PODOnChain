@@ -1863,7 +1863,7 @@ export default function DashboardPage() {
     <main className="min-h-dvh bg-background text-foreground">
       <div className="mx-auto max-w-6xl px-4 py-8 space-y-6">
         <header className="space-y-2">
-          <h1 className="text-2xl font-semibold">PODx Control Tower</h1>
+          <h1 className="text-2xl font-semibold">PODOnChain Control Tower</h1>
           <p className="text-sm text-muted-foreground">
             Manage buyer, supplier, and courier workflows from a single wallet-native dashboard.
           </p>

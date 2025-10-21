@@ -69,7 +69,7 @@ export function AppShell({ children }: AppShellProps) {
             Menu
           </Button>
           <Link href="/" className={cn("font-black uppercase tracking-[0.2em] text-sm")}>
-            PODx Control Tower
+            PODOnChain Control Tower
           </Link>
         </div>
 
@@ -80,4 +80,3 @@ export function AppShell({ children }: AppShellProps) {
     </div>
   )
 }
-

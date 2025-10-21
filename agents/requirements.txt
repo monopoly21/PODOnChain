@@ -1,9 +1,0 @@
-uagents
-python-dotenv
-hyperon
-requests
-web3
-aiosqlite==0.20.0
-fastapi
-uvicorn[standard]
-fastapi

@@ -23,7 +23,7 @@ export default function LandingPage() {
               Bold, wallet-native control for supply chains that refuse to slip.
             </h1>
             <p className="max-w-2xl text-lg leading-relaxed text-muted-foreground lg:text-xl">
-              PODx fuses programmable escrow, attested pickups, and real-time delivery geofence checks into a single
+              PODOnChain fuses programmable escrow, attested pickups, and real-time delivery geofence checks into a single
               command center. Automate PO funding, monitor courier accountability, and release payments the instant a
               drop is verified.
             </p>
@@ -83,7 +83,7 @@ export default function LandingPage() {
               <p className="neo-badge inline-flex items-center gap-2 text-xs">
                 Courier, Supplier & Buyer orchestration
               </p>
-              <h2 className="mt-3 text-2xl font-bold uppercase tracking-tight">How PODx keeps every persona in sync</h2>
+              <h2 className="mt-3 text-2xl font-bold uppercase tracking-tight">How PODOnChain keeps every persona in sync</h2>
             </div>
             <p className="max-w-md text-sm text-muted-foreground">
               The control tower watches every milestone. Trigger proofs, update inventory, and release funds without
@@ -112,7 +112,7 @@ export default function LandingPage() {
           <header className="flex flex-col gap-2 text-left md:flex-row md:items-end md:justify-between">
             <div>
               <p className="neo-badge inline-flex items-center gap-2 text-xs">Business model</p>
-              <h2 className="mt-3 text-2xl font-bold uppercase tracking-tight">How PODx sustains the control tower</h2>
+              <h2 className="mt-3 text-2xl font-bold uppercase tracking-tight">How PODOnChain sustains the control tower</h2>
             </div>
             <p className="max-w-md text-sm text-muted-foreground">
               Clear monetisation today, with a roadmap for deeper integrations and automation that compound the value of every wallet on the network.

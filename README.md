@@ -1,6 +1,6 @@
-# PODx v1 – wallet-native supply-chain control tower
+# PODOnChain v1 – wallet-native supply-chain control tower
 
-PODx turns a single thirdweb wallet into three personas:
+PODOnChain turns a single thirdweb wallet into three personas:
 
 - **Buyer** – import `buyer.csv` (products + locations), raise purchase orders, mark escrow funded.
 - **Supplier** – import `supplier.csv` (prices + courier allowlist), approve orders, create shipments, assign couriers.
@@ -123,5 +123,5 @@ The current repo is ready for hackathon demos: CSV ingestion, wallet-scoped data
 
 - **Proof & storage add-ons** – optional upgrades for persistent Lighthouse/IPFS storage, DataCoin minting, and enhanced geofence verification tiers (tooling wired up; packaging in progress).
 - **Integration marketplace** – plug-and-play connectors for SAP, NetSuite, WMS/TMS platforms, carrier APIs, and analytics tools, offered as premium modules or via partner revenue share.
-- **Automation hooks** – serverless/webhook triggers so operators can extend PODx with custom scripts, risk checks, or internal alerting.
+- **Automation hooks** – serverless/webhook triggers so operators can extend PODOnChain with custom scripts, risk checks, or internal alerting.
 - **Extended data services** – governance-friendly retention, compliance exports, and audit bundles for regulated supply chains.

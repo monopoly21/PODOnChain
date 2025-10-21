@@ -92,7 +92,7 @@ export function BrandSidebar({ onNavigate, variant = "desktop" }: BrandSidebarPr
           onClick={onNavigate}
           className="inline-block rounded-[1.75rem] border-[3px] border-border bg-card px-5 py-3 text-lg font-black uppercase tracking-[0.35em] [box-shadow:var(--shadow-hard)]"
         >
-          PODx
+          PODOnChain
         </Link>
         <p className="max-w-xs text-sm font-medium leading-relaxed text-muted-foreground">
           Wallet-native orchestration for trustless supply chains. Monitor orders, automate disputes, and release
