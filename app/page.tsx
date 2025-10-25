@@ -12,9 +12,14 @@ export default function LandingPage() {
     <main className="relative overflow-hidden">
       <TruckBackground />
       <section className="relative mx-auto flex min-h-[80vh] max-w-6xl flex-col gap-12 px-4 py-16 sm:px-6 md:px-8 lg:pt-20">
-        <div className="inline-flex max-w-max items-center gap-2 rounded-full border-[3px] border-border bg-secondary px-5 py-2 text-xs font-semibold uppercase tracking-wider text-secondary-foreground [box-shadow:var(--shadow-soft)]">
-          <span className="size-2 rounded-full bg-emerald-500" />
-          Live on Sepolia • PYUSD escrow • Geo-fenced proofs
+        <div className="flex flex-col gap-3">
+          <span className="neo-badge inline-flex max-w-max items-center gap-2 text-[0.65rem] tracking-[0.25em] text-muted-foreground">
+            Introducing PODOnChain
+          </span>
+          <div className="inline-flex max-w-max items-center gap-2 rounded-full border-[3px] border-border bg-secondary px-5 py-2 text-xs font-semibold uppercase tracking-wider text-secondary-foreground [box-shadow:var(--shadow-soft)]">
+            <span className="size-2 rounded-full bg-emerald-500" />
+            Live on Sepolia • PYUSD escrow • Geo-fenced proofs
+          </div>
         </div>
 
         <div className="grid gap-12 lg:grid-cols-[1.1fr_0.9fr] lg:items-start">
@@ -83,7 +88,7 @@ export default function LandingPage() {
               <p className="neo-badge inline-flex items-center gap-2 text-xs">
                 Courier, Supplier & Buyer orchestration
               </p>
-              <h2 className="mt-3 text-2xl font-bold uppercase tracking-tight">How PODOnChain keeps every persona in sync</h2>
+              <h2 className="mt-3 text-2xl font-bold tracking-tight">How PODOnChain keeps every persona in sync</h2>
             </div>
             <p className="max-w-md text-sm text-muted-foreground">
               The control tower watches every milestone. Trigger proofs, update inventory, and release funds without
@@ -112,7 +117,7 @@ export default function LandingPage() {
           <header className="flex flex-col gap-2 text-left md:flex-row md:items-end md:justify-between">
             <div>
               <p className="neo-badge inline-flex items-center gap-2 text-xs">Business model</p>
-              <h2 className="mt-3 text-2xl font-bold uppercase tracking-tight">How PODOnChain sustains the control tower</h2>
+              <h2 className="mt-3 text-2xl font-bold tracking-tight">How PODOnChain sustains the control tower</h2>
             </div>
             <p className="max-w-md text-sm text-muted-foreground">
               Clear monetisation today, with a roadmap for deeper integrations and automation that compound the value of every wallet on the network.

@@ -1,18 +1,19 @@
-# PODOnChain v1 – wallet-native supply-chain control tower
+# PODOnChain v1 – proof of delivery for ERP supply chains
 
-PODOnChain turns a single thirdweb wallet into three personas:
+PODOnChain is a proof-of-delivery (POD) platform that drops into existing ERP stacks like NetSuite, SAP, or Dynamics. It syncs directly with your order, inventory, and fulfillment records while turning a thirdweb wallet into three personas:
 
 - **Buyer** – import `buyer.csv` (products + locations), raise purchase orders, mark escrow funded.
 - **Supplier** – import `supplier.csv` (prices + courier allowlist), approve orders, create shipments, assign couriers.
 - **Courier** – claim shipments, capture photo proof, and complete geofence-verified pickup/drop to unlock escrow.
 
-Version 1 ships a full local-first stack:
+Version 1 ships a full local-first stack that can act as a sidecar to an ERP:
 
 - Prisma + SQLite (`data/podx.db`) scoped by wallet address.
 - CSV ingestion stored under `data/imports/<wallet>/*.csv` and normalised into Prisma models.
 - Next.js dashboard with Buyer/Supplier/Courier tabs (`/dashboard`).
 - Courier QR flow at `/courier/[shipmentId]` with built-in geofence validation at pickup & drop.
 - Solidity contracts (`contracts/`) ready for Sepolia deployment: Escrow, Order registry, Shipment registry.
+- ERP bridge via CSV, REST, or agent workflows so external systems (NetSuite, SAP, WMS/TMS) can push orders in and pull back proofs, settlement events, and exception alerts.
 
 ## Getting started
 
@@ -36,6 +37,13 @@ pnpm dev
 4. Switch to your supplier wallet, upload `public/templates/supplier.csv`.
 
 Each wallet owns its own catalog; switch wallets (cookie/localStorage) to act as buyer/supplier/courier.
+
+## ERP integration guide
+
+- **Push orders from ERP**: export purchase orders, pricing catalogues, or location masters via CSV or REST, then ingest through `/api/me/imports/*` to mirror ERP state on-chain.
+- **Sync delivery status back**: watch shipment webhooks or poll `/api/shipments/:id` to update ERP fulfillment status with geofenced proof artifacts, escrow receipts, and courier identifiers.
+- **Embed in NetSuite**: drop the `/dashboard` app inside a Suitelet iframe or external link; use the `agents/` folder workflows to schedule data pulls/pushes through NetSuite RESTlets.
+- **Extend via agents**: the Python agents under `agents/` can run scheduled jobs to reconcile POD events with ERP documents (item receipts, vendor bills, milestone alerts).
 
 ## Key routes
 
