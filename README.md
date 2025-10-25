@@ -45,6 +45,14 @@ Each wallet owns its own catalog; switch wallets (cookie/localStorage) to act as
 - **Embed in NetSuite**: drop the `/dashboard` app inside a Suitelet iframe or external link; use the `agents/` folder workflows to schedule data pulls/pushes through NetSuite RESTlets.
 - **Extend via agents**: the Python agents under `agents/` can run scheduled jobs to reconcile POD events with ERP documents (item receipts, vendor bills, milestone alerts).
 
+## Deployed contracts (Sepolia testnet)
+
+- PYUSD token: `0xCaC524BcA292aaade2DF8A05cC58F0a65B1B3bB9`
+- EscrowPYUSD: `0x9b76aAaaCD512bF7B31865632EC6Da0F132a1ae5`
+- OrderRegistry: `0x58245F4DEe633865b3F133B690e0d447F66CD1D7`
+- ShipmentRegistry: `0xAa90809d455E27D9017bF5E0cFf66554c23De8EC`
+- Delivery oracle (PKP signer): `0x2D7059bB9997F31895cfb70f4a31F7D4CFD5372f`
+
 ## Key routes
 
 | Route | Method | Description |
